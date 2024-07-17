@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 project(vive_ros2)
 
-if(NOT WIN32)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -Wextra -Wpedantic")
-endif()
- 
 # -----------------------------------------------------------------------------
 ## SYSTEM PROPERTIES ##
 if(NOT PLATFORM)
@@ -43,25 +39,11 @@ endif()
    endif()
  endif()
  # -----------------------------------------------------------------------------
- ## COMPILER DETECTION ##
- if(   (${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-    OR (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
-   # Better to use the prebuilt GNU preprocessor define __GNUC__,
-   # kept for legacy reason with the sample code.
-   add_definitions(-DGNUC)
- 
-   set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -std=c++17 -include ${SHARED_SRC_DIR}/compat.h")
-   set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG} -Wall -Wextra -pedantic -g")
-   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2")
- 
-   # Handles x86 compilation support on x64 arch.
-   if(${PLATFORM} MATCHES 32)
-     set(CMAKE_CXX_FLAGS        "${CMAKE_CXX_FLAGS} -m32")
-     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -m32")
-   endif()
- else()
-   message(FATAL_ERROR "Unsupported compiler '${CMAKE_CXX_COMPILER_ID}'")
- endif()
+ ## COMPILER FLAGS ##
+ set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -std=c++17 -include ${SHARED_SRC_DIR}/compat.h")
+ set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG} -Wall -Wextra -pedantic -g")
+ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2")
+
 # -----------------------------------------------------------------------------
 ## LIBRARIES ##
 ## OpenGL / GLU
@@ -87,20 +69,18 @@ endforeach()
 set(SDL2_INCLUDE_DIR ${THIRDPARTY_DIR}/sdl2-2.0.3/include)
  
 ## Vulkan
-if(NOT (${CMAKE_SYSTEM_NAME} MATCHES "Darwin"))
-  find_library(VULKAN_LIBRARY
-      NAMES
-        vulkan-1
-        vulkan
-      PATHS
-        ${THIRDPARTY_DIR}/vulkan-1.0.49.0/lib
-      PATH_SUFFIXES
-        linux${PLATFORM}
-        ${WINDOWS_PATH_SUFFIXES}
-      NO_DEFAULT_PATH
-  )
-  set(VULKAN_INCLUDE_DIR ${THIRDPARTY_DIR}/vulkan-1.0.49.0/include)
-endif()
+find_library(VULKAN_LIBRARY
+  NAMES
+    vulkan-1
+    vulkan
+  PATHS
+    ${THIRDPARTY_DIR}/vulkan-1.0.49.0/lib
+  PATH_SUFFIXES
+    linux${PLATFORM}
+    ${WINDOWS_PATH_SUFFIXES}
+  NO_DEFAULT_PATH
+)
+set(VULKAN_INCLUDE_DIR ${THIRDPARTY_DIR}/vulkan-1.0.49.0/include)
 
 ## find openvr
 ## OpenVR API path
@@ -123,21 +103,6 @@ file(GLOB SHARED_SRC_FILES
   ${SHARED_SRC_DIR}/*.h
 )
  
- 
-if(NOT (${CMAKE_SYSTEM_NAME} MATCHES "Darwin"))
-  include_directories(${VULKAN_INCLUDE_DIR})
-endif()
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
-endif()
-if(NOT PLATFORM)
-  if(CMAKE_SIZEOF_VOID_P MATCHES 8)
-    set(PLATFORM 64)
-  else()
-    set(PLATFORM 32)
-  endif()
-endif()
-message(STATUS "Compilation set for ${PLATFORM}bits architectures.")
  
 set(SDL_REQUIRED_LIBRARIES SDL2)
  
