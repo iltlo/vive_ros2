@@ -26,6 +26,10 @@
 #include "unistd.h"
 #endif
 
+#include <shared/compat.h>
+#include <unistd.h>		// for sleep
+#include <cmath>		// for M_PI
+
 #ifndef _WIN32
 #define APIENTRY
 #endif
@@ -41,6 +45,60 @@ void ThreadSleep( unsigned long nMilliseconds )
 #elif defined(POSIX)
 	usleep( nMilliseconds * 1000 );
 #endif
+}
+
+// Function to extract quaternion from the matrix
+vr::HmdQuaternion_t GetQuaternion(vr::HmdMatrix34_t m) {
+    vr::HmdQuaternion_t q;
+
+    q.w = sqrt(fmax(0, 1 + m.m[0][0] + m.m[1][1] + m.m[2][2])) / 2;
+    q.x = sqrt(fmax(0, 1 + m.m[0][0] - m.m[1][1] - m.m[2][2])) / 2;
+    q.y = sqrt(fmax(0, 1 - m.m[0][0] + m.m[1][1] - m.m[2][2])) / 2;
+    q.z = sqrt(fmax(0, 1 - m.m[0][0] - m.m[1][1] + m.m[2][2])) / 2;
+    q.x = copysign(q.x, m.m[2][1] - m.m[1][2]);
+    q.y = copysign(q.y, m.m[0][2] - m.m[2][0]);
+    q.z = copysign(q.z, m.m[1][0] - m.m[0][1]);
+
+    return q;
+}
+// Function to extract position from the matrix
+vr::HmdVector3_t GetPosition(vr::HmdMatrix34_t m) {
+    vr::HmdVector3_t vector;
+
+    vector.v[0] = m.m[0][3];
+    vector.v[1] = m.m[1][3];
+    vector.v[2] = m.m[2][3];
+
+    return vector;
+}
+// Define a structure for Euler angles
+struct EulerAngle {
+    float x; // Pitch
+    float y; // Yaw
+    float z; // Roll
+};
+// Function to convert quaternion to Euler angles (XYZ)
+EulerAngle QuaternionToEulerXYZ(const vr::HmdQuaternion_t& q) {
+    EulerAngle angles;
+
+    // Roll (x-axis rotation)
+    double sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
+    double cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
+    angles.x = std::atan2(sinr_cosp, cosr_cosp);
+
+    // Pitch (y-axis rotation)
+    double sinp = 2 * (q.w * q.y - q.z * q.x);
+    if (std::abs(sinp) >= 1)
+        angles.y = std::copysign(M_PI / 2, sinp); // use 90 degrees if out of range
+    else
+        angles.y = std::asin(sinp);
+
+    // Yaw (z-axis rotation)
+    double siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+    double cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+    angles.z = std::atan2(siny_cosp, cosy_cosp);
+
+    return angles;
 }
 
 class CGLRenderModel
@@ -441,6 +499,8 @@ bool CMainApplication::BInit()
 	// Loading the SteamVR Runtime
 	vr::EVRInitError eError = vr::VRInitError_None;
 	m_pHMD = vr::VR_Init( &eError, vr::VRApplication_Scene );
+	// OR
+	//	 vr::VR_Init( &eError, vr::VRApplication_Background );
 
 	if ( eError != vr::VRInitError_None )
 	{
@@ -532,6 +592,8 @@ bool CMainApplication::BInit()
 	{
 		printf("%s - Failed to initialize VR Compositor!\n", __FUNCTION__);
 		return false;
+	} else {
+		printf( "(DEBUG) Compositor initialization succeeded.\n" );
 	}
 
 	vr::VRInput()->SetActionManifestPath( Path_MakeAbsolute( "../hellovr_actions.json", Path_StripFilename( Path_GetExecutablePath() ) ).c_str() );
@@ -691,7 +753,7 @@ void CMainApplication::Shutdown()
 }
 
 //-----------------------------------------------------------------------------
-// Purpose:
+// Purpose: Runs in the main loop and checks for any input, updating action states
 //-----------------------------------------------------------------------------
 bool CMainApplication::HandleInput()
 {
@@ -737,12 +799,15 @@ bool CMainApplication::HandleInput()
 	vr::VRInputValueHandle_t ulHapticDevice;
 	if ( GetDigitalActionRisingEdge( m_actionTriggerHaptic, &ulHapticDevice ) )
 	{
+		printf("(DEBUG) [GRIP BUTTON]: ");
 		if ( ulHapticDevice == m_rHand[Left].m_source )
 		{
+			printf( "Trigger Haptic Left\n" );
 			vr::VRInput()->TriggerHapticVibrationAction( m_rHand[Left].m_actionHaptic, 0, 1, 4.f, 1.0f, vr::k_ulInvalidInputValueHandle );
 		}
 		if ( ulHapticDevice == m_rHand[Right].m_source )
 		{
+			printf( "Trigger Haptic Right\n" );
 			vr::VRInput()->TriggerHapticVibrationAction( m_rHand[Right].m_actionHaptic, 0, 1, 4.f, 1.0f, vr::k_ulInvalidInputValueHandle );
 		}
 	}
@@ -752,6 +817,7 @@ bool CMainApplication::HandleInput()
 	{
 		m_vAnalogValue[0] = analogData.x;
 		m_vAnalogValue[1] = analogData.y;
+		// printf("(DEBUG) [ANALOG PAD]: %f %f\n", m_vAnalogValue[0], m_vAnalogValue[1]);
 	}
 
 	m_rHand[Left].m_bShowController = true;
@@ -760,6 +826,7 @@ bool CMainApplication::HandleInput()
 	vr::VRInputValueHandle_t ulHideDevice;
 	if ( GetDigitalActionState( m_actionHideThisController, &ulHideDevice ) )
 	{
+		printf("(DEBUG) [MENU BUTTON]: Hide Controller\n");
 		if ( ulHideDevice == m_rHand[Left].m_source )
 		{
 			m_rHand[Left].m_bShowController = false;
@@ -781,6 +848,17 @@ bool CMainApplication::HandleInput()
 		else
 		{
 			m_rHand[eHand].m_rmat4Pose = ConvertSteamVRMatrixToMatrix4( poseData.pose.mDeviceToAbsoluteTracking );
+			
+			// The pose is printed out
+			vr::HmdMatrix34_t steamVRMatrix = poseData.pose.mDeviceToAbsoluteTracking;
+			vr::HmdVector3_t position = GetPosition(steamVRMatrix);
+        	vr::HmdQuaternion_t quaternion = GetQuaternion(steamVRMatrix);
+			EulerAngle euler = QuaternionToEulerXYZ(quaternion);
+			printf("(DEBUG)      [POSE]: %8.3f %8.3f %8.3f\n", 
+				position.v[0], position.v[1], position.v[2]);
+			printf("(DEBUG) [EULER DEG]: %8.3f %8.3f %8.3f %d\n\n", 
+				euler.x * (180.0 / M_PI), euler.y * (180.0 / M_PI), euler.z * (180.0 / M_PI), 
+				eHand);
 
 			vr::InputOriginInfo_t originInfo;
 			if ( vr::VRInput()->GetOriginTrackedDeviceInfo( poseData.activeOrigin, &originInfo, sizeof( originInfo ) ) == vr::VRInputError_None 
@@ -1101,8 +1179,9 @@ bool CMainApplication::CreateAllShaders()
 bool CMainApplication::SetupTexturemaps()
 {
 	std::string sExecutableDirectory = Path_StripFilename( Path_GetExecutablePath() );
+	printf("Executable directory: %s\n", sExecutableDirectory.c_str());
 	std::string strFullPath = Path_MakeAbsolute( "../cube_texture.png", sExecutableDirectory );
-	
+	printf("Full path to cube_texture.png: %s\n", strFullPath.c_str());
 	std::vector<unsigned char> imageRGBA;
 	unsigned nImageWidth, nImageHeight;
 	unsigned nError = lodepng::decode( imageRGBA, nImageWidth, nImageHeight, strFullPath.c_str() );
@@ -1794,6 +1873,10 @@ Matrix4 CMainApplication::ConvertSteamVRMatrixToMatrix4( const vr::HmdMatrix34_t
 		matPose.m[0][2], matPose.m[1][2], matPose.m[2][2], 0.0,
 		matPose.m[0][3], matPose.m[1][3], matPose.m[2][3], 1.0f
 		);
+	// printf("(DEBUG) Matrix4{0}: %6.2f %6.2f %6.2f %6.2f\n", matPose.m[0][0] * 10, matPose.m[0][1] * 10, matPose.m[0][2] * 10, matPose.m[0][3] * 10);
+	// printf("(DEBUG) Matrix4{1}: %6.2f %6.2f %6.2f %6.2f\n", matPose.m[1][0] * 10, matPose.m[1][1] * 10, matPose.m[1][2] * 10, matPose.m[1][3] * 10);
+	// printf("(DEBUG) Matrix4{2}: %6.2f %6.2f %6.2f %6.2f\n", matPose.m[2][0] * 10, matPose.m[2][1] * 10, matPose.m[2][2] * 10, matPose.m[2][3] * 10);
+	// printf("(DEBUG) Matrix4{3}: %6d %6d %6d %6d\n\n", 0, 0, 0, 1);
 	return matrixObj;
 }
 
