@@ -303,6 +303,39 @@ private: // OpenGL bookkeeping
 	vr::VRActionSetHandle_t m_actionsetDemo = vr::k_ulInvalidActionSetHandle;
 };
 
+bool isConnected(vr::TrackedDeviceIndex_t unDeviceIndex)
+{
+	return vr::VRSystem()->IsTrackedDeviceConnected(unDeviceIndex);
+}
+bool controllerIsConnected(vr::TrackedDeviceIndex_t unDeviceIndex)
+{
+	return vr::VRSystem()->GetTrackedDeviceClass(unDeviceIndex) == vr::TrackedDeviceClass_Controller;
+}
+
+// check if device is connected
+void deviceConnectionCheck( vr::IVRSystem *m_pHMD ){
+	for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++)
+	{
+		if (isConnected(i))
+		{
+			vr::ETrackedDeviceClass trackedDeviceClass = m_pHMD->GetTrackedDeviceClass(i);
+			printf("(DEBUG) [CONNECTED DEVICE %d]: %d\n", i, trackedDeviceClass);
+			// m_rDevClassChar[i] = (char)trackedDeviceClass;
+		}
+	}
+}
+// check if controller is connected
+void controllerConnectionCheck( vr::IVRSystem *m_pHMD ){
+	for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++)
+	{
+		if (controllerIsConnected(i))
+		{
+			vr::ETrackedControllerRole controllerRole = m_pHMD->GetControllerRoleForTrackedDeviceIndex(i);
+			printf("(DEBUG) [CONNECTED CONTROLLER %d]: %d\n", i, controllerRole);
+				// TODO: check if left 0 right 1
+		}
+	}
+}
 
 //---------------------------------------------------------------------------------------------------------------------
 // Purpose: Returns true if the action is active and had a rising edge
@@ -597,7 +630,7 @@ bool CMainApplication::BInit()
 	}
 
 	vr::VRInput()->SetActionManifestPath( Path_MakeAbsolute( "../hellovr_actions.json", Path_StripFilename( Path_GetExecutablePath() ) ).c_str() );
-
+	printf("Path to hellovr_actions.json: %s\n", Path_MakeAbsolute( "../hellovr_actions.json", Path_StripFilename( Path_GetExecutablePath() ) ).c_str());
 	vr::VRInput()->GetActionHandle( "/actions/demo/in/HideCubes", &m_actionHideCubes );
 	vr::VRInput()->GetActionHandle( "/actions/demo/in/HideThisController", &m_actionHideThisController);
 	vr::VRInput()->GetActionHandle( "/actions/demo/in/TriggerHaptic", &m_actionTriggerHaptic );
@@ -787,6 +820,10 @@ bool CMainApplication::HandleInput()
 		ProcessVREvent( event );
 	}
 
+	// Test the device connection
+	// controllerConnectionCheck(m_pHMD);
+	// deviceConnectionCheck(m_pHMD);
+
 	// Process SteamVR action state
 	// UpdateActionState is called each frame to update the state of the actions themselves. The application
 	// controls which action sets are active with the provided array of VRActiveActionSet_t structs.
@@ -794,7 +831,12 @@ bool CMainApplication::HandleInput()
 	actionSet.ulActionSet = m_actionsetDemo;
 	vr::VRInput()->UpdateActionState( &actionSet, sizeof(actionSet), 1 );
 
+	// the trigger button
 	m_bShowCubes = !GetDigitalActionState( m_actionHideCubes );
+	if ( GetDigitalActionRisingEdge( m_actionHideCubes ) )
+	{
+		printf("(DEBUG) [TRIGGER BUTTON]: Hide Cubes\n");
+	}
 
 	vr::VRInputValueHandle_t ulHapticDevice;
 	if ( GetDigitalActionRisingEdge( m_actionTriggerHaptic, &ulHapticDevice ) )
@@ -854,9 +896,9 @@ bool CMainApplication::HandleInput()
 			vr::HmdVector3_t position = GetPosition(steamVRMatrix);
         	vr::HmdQuaternion_t quaternion = GetQuaternion(steamVRMatrix);
 			EulerAngle euler = QuaternionToEulerXYZ(quaternion);
-			printf("(DEBUG)      [POSE]: %8.3f %8.3f %8.3f\n", 
-				position.v[0], position.v[1], position.v[2]);
-			printf("(DEBUG) [EULER DEG]: %8.3f %8.3f %8.3f %d\n\n", 
+			printf("(DEBUG)   [POSE CM]: %8.2f %8.2f %8.2f\n", 
+				position.v[0] * 100, position.v[1] * 100, position.v[2] * 100);
+			printf("(DEBUG) [EULER DEG]: %8.2f %8.2f %8.2f %d\n\n", 
 				euler.x * (180.0 / M_PI), euler.y * (180.0 / M_PI), euler.z * (180.0 / M_PI), 
 				eHand);
 
