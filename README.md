@@ -1,4 +1,4 @@
-# vive_ros2
+# vive_ros2 (development in progress)
 
 ## Installation instructions
 
@@ -39,5 +39,6 @@ make
 ## Usage
 
 ```bash
-
+source <PATH to ROS2 workspace>/src/vive_ros2/scripts/set_vr_env.sh
+...
 ```
