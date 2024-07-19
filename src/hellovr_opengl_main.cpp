@@ -3,15 +3,7 @@
 #include <SDL.h>
 #include <GL/glew.h>
 #include <SDL_opengl.h>
-#if defined( OSX )
-#include <Foundation/Foundation.h>
-#include <AppKit/AppKit.h>
-#include <OpenGL/glu.h>
-// Apple's version of glut.h #undef's APIENTRY, redefine it
-#define APIENTRY
-#else
 #include <GL/glu.h>
-#endif
 #include <stdio.h>
 #include <string>
 #include <cstdlib>
@@ -332,7 +324,6 @@ void controllerConnectionCheck( vr::IVRSystem *m_pHMD ){
 		{
 			vr::ETrackedControllerRole controllerRole = m_pHMD->GetControllerRoleForTrackedDeviceIndex(i);
 			printf("(DEBUG) [CONNECTED CONTROLLER %d]: %d\n", i, controllerRole);
-				// TODO: check if left 0 right 1
 		}
 	}
 }

@@ -161,5 +161,24 @@ install(TARGETS vive_example DESTINATION lib/${PROJECT_NAME})
 # Specify dependencies for the ament build system
 ament_target_dependencies(vive_example rclcpp std_msgs geometry_msgs sensor_msgs)
 
+add_executable(vive_node
+  ${SHARED_SRC_FILES}
+  src/vive_node.cpp
+)
+target_link_libraries(vive_node
+  ${OPENGL_LIBRARIES}
+  ${GLEW_LIBRARIES}
+  ${SDL2_LIBRARIES}
+  ${OPENVR_LIBRARIES}
+  ${CMAKE_DL_LIBS}
+  ${EXTRA_LIBS}
+  ${rclcpp_LIBRARIES}
+  ${rmw_implementation_LIBRARIES}
+  ${geometry_msgs_LIBRARIES}
+  ${sensor_msgs_LIBRARIES}
+)
+install(TARGETS vive_node DESTINATION lib/${PROJECT_NAME})
+ament_target_dependencies(vive_node rclcpp std_msgs geometry_msgs sensor_msgs)
+
 # Finalize the ament package
 ament_package()
