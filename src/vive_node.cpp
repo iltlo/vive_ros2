@@ -168,7 +168,7 @@ bool shutdownVR() {
 
 // the runVR function should be a ROS2 loop that publishes the pose of the HMD and controllers
 void runVR() {
-  while (true) {
+  while (rclcpp::ok()) {
     double tf_matrix[3][4];
 
     // deviceConnectionCheck(pHMD);
@@ -200,6 +200,8 @@ void runVR() {
 
 
 int main(int argc, char ** argv) {
+  rclcpp::init(argc, argv);
+
   if ( !initVR() ) {
     // Failed to initialize VR runtime
     shutdownVR();
