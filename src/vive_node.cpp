@@ -20,6 +20,8 @@
 
 #include <cstdio>
 
+// ros2 include
+#include "rclcpp/rclcpp.hpp"
 
 // Define log levels
 enum LogLevel {
@@ -40,6 +42,60 @@ void logMessage(LogLevel level, const std::string& message) {
             std::cerr << "[ERROR] " << message << std::endl;
             break;
     }
+}
+
+// Function to extract quaternion from the matrix
+vr::HmdQuaternion_t GetQuaternion(vr::HmdMatrix34_t m) {
+    vr::HmdQuaternion_t q;
+
+    q.w = sqrt(fmax(0, 1 + m.m[0][0] + m.m[1][1] + m.m[2][2])) / 2;
+    q.x = sqrt(fmax(0, 1 + m.m[0][0] - m.m[1][1] - m.m[2][2])) / 2;
+    q.y = sqrt(fmax(0, 1 - m.m[0][0] + m.m[1][1] - m.m[2][2])) / 2;
+    q.z = sqrt(fmax(0, 1 - m.m[0][0] - m.m[1][1] + m.m[2][2])) / 2;
+    q.x = copysign(q.x, m.m[2][1] - m.m[1][2]);
+    q.y = copysign(q.y, m.m[0][2] - m.m[2][0]);
+    q.z = copysign(q.z, m.m[1][0] - m.m[0][1]);
+
+    return q;
+}
+// Function to extract position from the matrix
+vr::HmdVector3_t GetPosition(vr::HmdMatrix34_t m) {
+    vr::HmdVector3_t vector;
+
+    vector.v[0] = m.m[0][3];
+    vector.v[1] = m.m[1][3];
+    vector.v[2] = m.m[2][3];
+
+    return vector;
+}
+// Define a structure for Euler angles
+struct EulerAngle {
+    float x; // Pitch
+    float y; // Yaw
+    float z; // Roll
+};
+// Function to convert quaternion to Euler angles (XYZ)
+EulerAngle QuaternionToEulerXYZ(const vr::HmdQuaternion_t& q) {
+    EulerAngle angles;
+
+    // Roll (x-axis rotation)
+    double sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
+    double cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
+    angles.x = std::atan2(sinr_cosp, cosr_cosp);
+
+    // Pitch (y-axis rotation)
+    double sinp = 2 * (q.w * q.y - q.z * q.x);
+    if (std::abs(sinp) >= 1)
+        angles.y = std::copysign(M_PI / 2, sinp); // use 90 degrees if out of range
+    else
+        angles.y = std::asin(sinp);
+
+    // Yaw (z-axis rotation)
+    double siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+    double cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+    angles.z = std::atan2(siny_cosp, cosy_cosp);
+
+    return angles;
 }
 
 bool isConnected(vr::TrackedDeviceIndex_t unDeviceIndex)
@@ -87,6 +143,8 @@ void controllerConnectionCheck( vr::IVRSystem *m_pHMD ){
 
 vr::IVRSystem *pHMD;
 vr::EVRInitError eError = vr::VRInitError_None;
+vr::InputPoseActionData_t poseData;
+vr::TrackedDevicePose_t trackedDevicePose[vr::k_unMaxTrackedDeviceCount];
 
 bool initVR() {
   pHMD = vr::VR_Init(&eError, vr::VRApplication_Background);
@@ -111,9 +169,32 @@ bool shutdownVR() {
 // the runVR function should be a ROS2 loop that publishes the pose of the HMD and controllers
 void runVR() {
   while (true) {
+    double tf_matrix[3][4];
+
     // deviceConnectionCheck(pHMD);
-    controllerConnectionCheck(pHMD);
-    sleep(1);
+    // controllerConnectionCheck(pHMD);
+
+    // update the poses
+    pHMD->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, trackedDevicePose, vr::k_unMaxTrackedDeviceCount);
+    // or vr::TrackingUniverseRawAndUncalibrated
+
+    for (int i = 0; i <  vr::k_unMaxTrackedDeviceCount; i++) {
+      if (trackedDevicePose[i].bDeviceIsConnected && trackedDevicePose[i].bPoseIsValid
+        && trackedDevicePose[i].eTrackingResult == vr::TrackingResult_Running_OK) {
+        // Get the pose of the device
+        vr::HmdMatrix34_t steamVRMatrix = trackedDevicePose[i].mDeviceToAbsoluteTracking;
+        vr::HmdVector3_t position = GetPosition(steamVRMatrix);
+        vr::HmdQuaternion_t quaternion = GetQuaternion(steamVRMatrix);
+        EulerAngle euler = QuaternionToEulerXYZ(quaternion);
+        logMessage(Debug, "[POSE CM]: " + std::to_string(position.v[0] * 100) + " " + std::to_string(position.v[1] * 100) + " " + std::to_string(position.v[2] * 100));
+        logMessage(Debug, "[EULER DEG]: " + std::to_string(euler.x * (180.0 / M_PI)) + " " + std::to_string(euler.y * (180.0 / M_PI)) + " " + std::to_string(euler.z * (180.0 / M_PI)) + "\n");
+
+        // TODO: create a function to broadcast the pose to ROS2 using TF
+
+      }
+    }
+
+    sleep(0.05);
   }
 }
 
