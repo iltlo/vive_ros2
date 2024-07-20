@@ -27,7 +27,11 @@ endif()
  # -----------------------------------------------------------------------------
  ## PATHS ##
 #  set(OPENVR "${CMAKE_CURRENT_SOURCE_DIR}/../../openvr")
- set(OPENVR ${PROJECT_SOURCE_DIR}/../../libraries/openvr)
+#  set(OPENVR ${PROJECT_SOURCE_DIR}/../../libraries/openvr)
+
+# openvr is located in the libraries folder in ~
+ set(OPENVR $ENV{HOME}/libraries/openvr)
+
  add_definitions(-DOPENVR_PATH="${OPENVR}")
  set(THIRDPARTY_DIR ${OPENVR}/samples/thirdparty)
  set(SHARED_SRC_DIR ${OPENVR}/samples/shared)
@@ -117,7 +121,7 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 # find_package(tf2 REQUIRED)
-# find_package(tf2_ros REQUIRED)
+find_package(tf2_ros REQUIRED)
 # find_package(std_srvs REQUIRED)
 
 # Include directories for the project
@@ -148,10 +152,10 @@ target_link_libraries(vive_example
   ${OPENVR_LIBRARIES}
   ${CMAKE_DL_LIBS}
   ${EXTRA_LIBS}
-  ${rclcpp_LIBRARIES}
+  # ${rclcpp_LIBRARIES}
   ${rmw_implementation_LIBRARIES}
-  ${geometry_msgs_LIBRARIES}
-  ${sensor_msgs_LIBRARIES}
+  # ${geometry_msgs_LIBRARIES}
+  # ${sensor_msgs_LIBRARIES}
 )
 
 # Install the executable and launch directory
@@ -173,12 +177,13 @@ target_link_libraries(vive_node
   ${CMAKE_DL_LIBS}
   ${EXTRA_LIBS}
   ${rclcpp_LIBRARIES}
-  ${rmw_implementation_LIBRARIES}
+  # ${rmw_implementation_LIBRARIES}
   ${geometry_msgs_LIBRARIES}
-  ${sensor_msgs_LIBRARIES}
+  # ${sensor_msgs_LIBRARIES}
 )
 install(TARGETS vive_node DESTINATION lib/${PROJECT_NAME})
-ament_target_dependencies(vive_node rclcpp std_msgs geometry_msgs sensor_msgs)
+ament_target_dependencies(vive_node rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs)
+# ament_target_dependencies(vive_node rclcpp tf2_ros std_msgs geometry_msgs)
 
 # Finalize the ament package
 ament_package()

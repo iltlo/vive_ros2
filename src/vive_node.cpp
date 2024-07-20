@@ -21,9 +21,11 @@
 #include <cstdio>
 
 // ros2 include
-#include "rclcpp/rclcpp.hpp"
+#include <rclcpp/rclcpp.hpp>
+#include "tf2_ros/transform_broadcaster.h"
+#include "geometry_msgs/msg/transform_stamped.h"
+#include "tf2/LinearMath/Quaternion.h"
 
-// Define log levels
 enum LogLevel {
     Info,
     Debug,
@@ -44,88 +46,169 @@ void logMessage(LogLevel level, const std::string& message) {
     }
 }
 
-// Function to extract quaternion from the matrix
-vr::HmdQuaternion_t GetQuaternion(vr::HmdMatrix34_t m) {
-    vr::HmdQuaternion_t q;
-
-    q.w = sqrt(fmax(0, 1 + m.m[0][0] + m.m[1][1] + m.m[2][2])) / 2;
-    q.x = sqrt(fmax(0, 1 + m.m[0][0] - m.m[1][1] - m.m[2][2])) / 2;
-    q.y = sqrt(fmax(0, 1 - m.m[0][0] + m.m[1][1] - m.m[2][2])) / 2;
-    q.z = sqrt(fmax(0, 1 - m.m[0][0] - m.m[1][1] + m.m[2][2])) / 2;
-    q.x = copysign(q.x, m.m[2][1] - m.m[1][2]);
-    q.y = copysign(q.y, m.m[0][2] - m.m[2][0]);
-    q.z = copysign(q.z, m.m[1][0] - m.m[0][1]);
-
-    return q;
-}
-// Function to extract position from the matrix
-vr::HmdVector3_t GetPosition(vr::HmdMatrix34_t m) {
-    vr::HmdVector3_t vector;
-
-    vector.v[0] = m.m[0][3];
-    vector.v[1] = m.m[1][3];
-    vector.v[2] = m.m[2][3];
-
-    return vector;
-}
 // Define a structure for Euler angles
 struct EulerAngle {
     float x; // Pitch
     float y; // Yaw
     float z; // Roll
 };
-// Function to convert quaternion to Euler angles (XYZ)
-EulerAngle QuaternionToEulerXYZ(const vr::HmdQuaternion_t& q) {
-    EulerAngle angles;
 
-    // Roll (x-axis rotation)
-    double sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
-    double cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
-    angles.x = std::atan2(sinr_cosp, cosr_cosp);
 
-    // Pitch (y-axis rotation)
-    double sinp = 2 * (q.w * q.y - q.z * q.x);
-    if (std::abs(sinp) >= 1)
-        angles.y = std::copysign(M_PI / 2, sinp); // use 90 degrees if out of range
-    else
-        angles.y = std::asin(sinp);
+class VRTransformUtils {
+public:
+    static vr::HmdQuaternion_t GetQuaternion(const vr::HmdMatrix34_t& m) {
+        vr::HmdQuaternion_t q;
 
-    // Yaw (z-axis rotation)
-    double siny_cosp = 2 * (q.w * q.z + q.x * q.y);
-    double cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
-    angles.z = std::atan2(siny_cosp, cosy_cosp);
+        q.w = sqrt(std::fmax(0, 1 + m.m[0][0] + m.m[1][1] + m.m[2][2])) / 2;
+        q.x = sqrt(std::fmax(0, 1 + m.m[0][0] - m.m[1][1] - m.m[2][2])) / 2;
+        q.y = sqrt(std::fmax(0, 1 - m.m[0][0] + m.m[1][1] - m.m[2][2])) / 2;
+        q.z = sqrt(std::fmax(0, 1 - m.m[0][0] - m.m[1][1] + m.m[2][2])) / 2;
+        q.x = copysign(q.x, m.m[2][1] - m.m[1][2]);
+        q.y = copysign(q.y, m.m[0][2] - m.m[2][0]);
+        q.z = copysign(q.z, m.m[1][0] - m.m[0][1]);
 
-    return angles;
+        return q;
+    }
+
+    static vr::HmdVector3_t GetPosition(const vr::HmdMatrix34_t& m) {
+        vr::HmdVector3_t vector;
+
+        vector.v[0] = m.m[0][3];
+        vector.v[1] = m.m[1][3];
+        vector.v[2] = m.m[2][3];
+
+        return vector;
+    }
+
+    static EulerAngle QuaternionToEulerXYZ(const vr::HmdQuaternion_t& q) {
+        EulerAngle angles;
+
+        // Roll (x-axis rotation)
+        double sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
+        double cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
+        angles.x = std::atan2(sinr_cosp, cosr_cosp);
+
+        // Pitch (y-axis rotation)
+        double sinp = 2 * (q.w * q.y - q.z * q.x);
+        if (std::abs(sinp) >= 1)
+            angles.y = std::copysign(M_PI / 2, sinp); // use 90 degrees if out of range
+        else
+            angles.y = std::asin(sinp);
+
+        // Yaw (z-axis rotation)
+        double siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+        double cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+        angles.z = std::atan2(siny_cosp, cosy_cosp);
+
+        return angles;
+    }
+};
+
+class VIVENode : public rclcpp::Node {
+public:
+    VIVENode();
+    ~VIVENode();
+    void runVR();
+
+private:
+    vr::IVRSystem *pHMD = nullptr;
+    vr::EVRInitError eError = vr::VRInitError_None;
+    vr::TrackedDevicePose_t trackedDevicePose[vr::k_unMaxTrackedDeviceCount];
+    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+
+    bool initVR();
+    bool shutdownVR();
+    bool deviceIsConnected(vr::TrackedDeviceIndex_t unDeviceIndex);
+    bool controllerIsConnected(vr::TrackedDeviceIndex_t unDeviceIndex);
+    void deviceConnectionCheck();
+    void controllerConnectionCheck();
+    // void pubTFPose(int deviceIndex, const vr::HmdVector3_t& position, const vr::HmdQuaternion_t& quaternion);
+};
+
+VIVENode::VIVENode() : Node("vive_node") {
+    // Constructor implementation...
+    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+    if (!initVR()) {
+        shutdownVR();
+        throw std::runtime_error("Failed to initialize VR");
+    }
+}
+VIVENode::~VIVENode() {
+    shutdownVR();
 }
 
-bool isConnected(vr::TrackedDeviceIndex_t unDeviceIndex)
-{
+void VIVENode::runVR() {
+  logMessage(Info, "Starting VR loop");
+  while (rclcpp::ok()) {
+    deviceConnectionCheck();
+    // controllerConnectionCheck();
+
+    // update the poses
+    pHMD->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, trackedDevicePose, vr::k_unMaxTrackedDeviceCount);
+    // or vr::TrackingUniverseRawAndUncalibrated
+
+    for (uint32_t i = 0; i <  vr::k_unMaxTrackedDeviceCount; i++) {
+      if (trackedDevicePose[i].bDeviceIsConnected && trackedDevicePose[i].bPoseIsValid
+        && trackedDevicePose[i].eTrackingResult == vr::TrackingResult_Running_OK) {
+        // Get the pose of the device
+        vr::HmdMatrix34_t steamVRMatrix = trackedDevicePose[i].mDeviceToAbsoluteTracking;
+        vr::HmdVector3_t position = VRTransformUtils::GetPosition(steamVRMatrix);
+        vr::HmdQuaternion_t quaternion = VRTransformUtils::GetQuaternion(steamVRMatrix);
+        EulerAngle euler = VRTransformUtils::QuaternionToEulerXYZ(quaternion);
+        logMessage(Debug, "[POSE CM]: " + std::to_string(position.v[0] * 100) + " " + std::to_string(position.v[1] * 100) + " " + std::to_string(position.v[2] * 100));
+        logMessage(Debug, "[EULER DEG]: " + std::to_string(euler.x * (180.0 / M_PI)) + " " + std::to_string(euler.y * (180.0 / M_PI)) + " " + std::to_string(euler.z * (180.0 / M_PI)) + "\n");
+
+        // TODO: create a function to broadcast the pose to ROS2 using TF
+        // pubTFPose(i, position, quaternion);
+
+      }
+    }
+
+    sleep(0.05);
+  }
+}
+
+bool VIVENode::initVR() {
+    // Initialize VR runtime
+    eError = vr::VRInitError_None;
+    pHMD = vr::VR_Init(&eError, vr::VRApplication_Scene);
+    if (eError != vr::VRInitError_None) {
+        pHMD = NULL;
+        std::string error_msg = vr::VR_GetVRInitErrorAsEnglishDescription(eError);
+        logMessage(Error, "Unable to init VR runtime: " + error_msg);
+        return false;
+    } else {
+        logMessage(Info, "VR runtime initialized");
+    }
+    return true;
+}
+bool VIVENode::shutdownVR() {
+    // Shutdown VR runtime
+    if (pHMD) {
+        logMessage(Info, "Shutting down VR runtime");
+        vr::VR_Shutdown();
+    }
+    return true;
+}
+
+bool VIVENode::deviceIsConnected(vr::TrackedDeviceIndex_t unDeviceIndex) {
 	return vr::VRSystem()->IsTrackedDeviceConnected(unDeviceIndex);
 }
-bool controllerIsConnected(vr::TrackedDeviceIndex_t unDeviceIndex)
-{
+bool VIVENode::controllerIsConnected(vr::TrackedDeviceIndex_t unDeviceIndex) {
 	return vr::VRSystem()->GetTrackedDeviceClass(unDeviceIndex) == vr::TrackedDeviceClass_Controller;
 }
-// check if device is connected
-void deviceConnectionCheck( vr::IVRSystem *m_pHMD ){
-	for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++)
-	{
-		if (isConnected(i))
-		{
-			vr::ETrackedDeviceClass trackedDeviceClass = m_pHMD->GetTrackedDeviceClass(i);
+void VIVENode::deviceConnectionCheck() {
+  for (uint32_t i = 0; i < vr::k_unMaxTrackedDeviceCount; i++) {
+    if (deviceIsConnected(i)) {
+      vr::ETrackedDeviceClass trackedDeviceClass = pHMD->GetTrackedDeviceClass(i);
       logMessage(Debug, "[CONNECTED DEVICE " + std::to_string(i) + "]: class " + std::to_string(trackedDeviceClass));
-      // Device class 0: no device, 1: HMD, 2: controller, 3: generic tracker, 4: lighthouse base station
-			
-      // m_rDevClassChar[i] = (char)trackedDeviceClass;
-		}
-	}
-  printf("\n");
+    }
+  }
 }
-// check if controller is connected
-void controllerConnectionCheck( vr::IVRSystem *m_pHMD ){
-	for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++) {
-		if (controllerIsConnected(i)) {
-			vr::ETrackedControllerRole controllerRole = m_pHMD->GetControllerRoleForTrackedDeviceIndex(i);
+void VIVENode::controllerConnectionCheck() {
+  for (uint32_t i = 0; i < vr::k_unMaxTrackedDeviceCount; i++) {
+    if (controllerIsConnected(i)) {
+			vr::ETrackedControllerRole controllerRole = pHMD->GetControllerRoleForTrackedDeviceIndex(i);
       // Controller role 0: invalid, 1: left hand, 2: right hand
       if (controllerRole != vr::TrackedControllerRole_Invalid) {
         if (controllerRole == vr::TrackedControllerRole_LeftHand) {
@@ -137,77 +220,15 @@ void controllerConnectionCheck( vr::IVRSystem *m_pHMD ){
         }
         printf("\n");
       }
-		}
-	}
-}
-
-vr::IVRSystem *pHMD;
-vr::EVRInitError eError = vr::VRInitError_None;
-vr::InputPoseActionData_t poseData;
-vr::TrackedDevicePose_t trackedDevicePose[vr::k_unMaxTrackedDeviceCount];
-
-bool initVR() {
-  pHMD = vr::VR_Init(&eError, vr::VRApplication_Background);
-  if (eError != vr::VRInitError_None) {
-    pHMD = NULL;
-    std::string error_msg = vr::VR_GetVRInitErrorAsEnglishDescription(eError);
-    logMessage(Error, "Unable to init VR runtime: " + error_msg);
-    return false;
-  } else {
-    logMessage(Info, "VR runtime initialized");
-  }
-  return true;
-}
-bool shutdownVR() {
-  if (pHMD) {
-    logMessage(Info, "Shutting down VR runtime");
-    vr::VR_Shutdown();
-  }
-  return true;
-}
-
-// the runVR function should be a ROS2 loop that publishes the pose of the HMD and controllers
-void runVR() {
-  while (rclcpp::ok()) {
-    double tf_matrix[3][4];
-
-    // deviceConnectionCheck(pHMD);
-    // controllerConnectionCheck(pHMD);
-
-    // update the poses
-    pHMD->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, trackedDevicePose, vr::k_unMaxTrackedDeviceCount);
-    // or vr::TrackingUniverseRawAndUncalibrated
-
-    for (int i = 0; i <  vr::k_unMaxTrackedDeviceCount; i++) {
-      if (trackedDevicePose[i].bDeviceIsConnected && trackedDevicePose[i].bPoseIsValid
-        && trackedDevicePose[i].eTrackingResult == vr::TrackingResult_Running_OK) {
-        // Get the pose of the device
-        vr::HmdMatrix34_t steamVRMatrix = trackedDevicePose[i].mDeviceToAbsoluteTracking;
-        vr::HmdVector3_t position = GetPosition(steamVRMatrix);
-        vr::HmdQuaternion_t quaternion = GetQuaternion(steamVRMatrix);
-        EulerAngle euler = QuaternionToEulerXYZ(quaternion);
-        logMessage(Debug, "[POSE CM]: " + std::to_string(position.v[0] * 100) + " " + std::to_string(position.v[1] * 100) + " " + std::to_string(position.v[2] * 100));
-        logMessage(Debug, "[EULER DEG]: " + std::to_string(euler.x * (180.0 / M_PI)) + " " + std::to_string(euler.y * (180.0 / M_PI)) + " " + std::to_string(euler.z * (180.0 / M_PI)) + "\n");
-
-        // TODO: create a function to broadcast the pose to ROS2 using TF
-
-      }
     }
-
-    sleep(0.05);
   }
 }
 
 
-int main(int argc, char ** argv) {
-  rclcpp::init(argc, argv);
-
-  if ( !initVR() ) {
-    // Failed to initialize VR runtime
-    shutdownVR();
-  }
-
-  // Main loop
-  runVR();
-
+int main(int argc, char **argv) {
+    rclcpp::init(argc, argv);
+    auto vive_node = std::make_shared<VIVENode>();
+    vive_node->runVR();
+    rclcpp::shutdown();
+    return 0;
 }
