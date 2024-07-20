@@ -32,13 +32,38 @@ make
     ```
     Run the demo code as follows:
     ```bash
+    # copy the texture files to the bin folder
+    cd <PATH to ROS2 workspace>
+    cp libraries/openvr/samples/bin/cube_texture.png libraries/openvr/samples/bin/hellovr_* install/vive_ros2/lib/
+    ```
+    ```bash
+    # Run demo code
     ~/.steam/steam/ubuntu12_32/steam-runtime/run.sh <PATH to ROS2 workspace>/libraries/openvr/samples/bin/linux64/hellovr_opengl
     ```
+    <div style="text-align: center;">
+    <video controls width="320" height="240" src="./docs/videos/hellovr_opengl-demo.mp4" title="hellovr_opengl"></video>
+    </div>
 
 
 ## Usage
+1. Build the package.
+    ```bash
+    cd <PATH to ROS2 workspace>
+    colcon build --packages-select vive_ros2
+    source install/setup.bash
+    ```
+2. Start SteamVR.
+    ```bash
+    source <PATH to ROS2 workspace>/src/vive_ros2/scripts/set_vr_env.sh
+    $STEAMVR/bin/linux64/vrserver --keepalive
+    ```
+3. Run the package.
+    ```bash
+    # Development in Progress...
+    ```
 
-```bash
-source <PATH to ROS2 workspace>/src/vive_ros2/scripts/set_vr_env.sh
-...
-```
+
+## Development Environment
+- Ubuntu 22.04
+- ROS2 Humble
+- OpenVR SDK v2.5.1
