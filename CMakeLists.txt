@@ -127,6 +127,7 @@ find_package(tf2_ros REQUIRED)
 # Include directories for the project
 include_directories(
   .
+  include/vive_ros2
   ${OPENGL_INCLUDE_DIR}
   ${GLEW_INCLUDE_DIR}
   ${SDL2_INCLUDE_DIR}
@@ -165,11 +166,11 @@ install(TARGETS vive_example DESTINATION lib/${PROJECT_NAME})
 # Specify dependencies for the ament build system
 ament_target_dependencies(vive_example rclcpp std_msgs geometry_msgs sensor_msgs)
 
-add_executable(vive_node
+add_executable(vive_input
   ${SHARED_SRC_FILES}
-  src/vive_node.cpp
+  src/vive_input.cpp
 )
-target_link_libraries(vive_node
+target_link_libraries(vive_input
   ${OPENGL_LIBRARIES}
   ${GLEW_LIBRARIES}
   ${SDL2_LIBRARIES}
@@ -181,8 +182,8 @@ target_link_libraries(vive_node
   ${geometry_msgs_LIBRARIES}
   # ${sensor_msgs_LIBRARIES}
 )
-install(TARGETS vive_node DESTINATION lib/${PROJECT_NAME})
-ament_target_dependencies(vive_node rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs)
+install(TARGETS vive_input DESTINATION lib/${PROJECT_NAME})
+ament_target_dependencies(vive_input rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs)
 # ament_target_dependencies(vive_node rclcpp tf2_ros std_msgs geometry_msgs)
 
 # Finalize the ament package
