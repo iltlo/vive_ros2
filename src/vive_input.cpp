@@ -1,22 +1,12 @@
-#include <SDL.h>
-#include <GL/glew.h>
-#include <SDL_opengl.h>
-#include <GL/glu.h>
 #include <stdio.h>
 #include <string>
 #include <cstdlib>
 
 #include <openvr.h>
 
-#include "shared/lodepng.h"
-#include "shared/Matrices.h"
-#include "shared/pathtools.h"
-
 #include <shared/compat.h>
 #include <unistd.h>		// for sleep
 #include <cmath>		// for M_PI
-
-#include <boost/function.hpp>
 
 #include <cstdio>
 #include <chrono> // Include this for std::chrono

@@ -153,38 +153,26 @@ target_link_libraries(vive_example
   ${OPENVR_LIBRARIES}
   ${CMAKE_DL_LIBS}
   ${EXTRA_LIBS}
-  # ${rclcpp_LIBRARIES}
   ${rmw_implementation_LIBRARIES}
-  # ${geometry_msgs_LIBRARIES}
-  # ${sensor_msgs_LIBRARIES}
 )
 
 # Install the executable and launch directory
 install(TARGETS vive_example DESTINATION lib/${PROJECT_NAME})
-# install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 # Specify dependencies for the ament build system
-ament_target_dependencies(vive_example rclcpp std_msgs geometry_msgs sensor_msgs)
+# ament_target_dependencies(vive_example rclcpp std_msgs geometry_msgs sensor_msgs)
 
 add_executable(vive_input
   ${SHARED_SRC_FILES}
   src/vive_input.cpp
 )
 target_link_libraries(vive_input
-  ${OPENGL_LIBRARIES}
-  ${GLEW_LIBRARIES}
-  ${SDL2_LIBRARIES}
   ${OPENVR_LIBRARIES}
   ${CMAKE_DL_LIBS}
   ${EXTRA_LIBS}
-  ${rclcpp_LIBRARIES}
-  # ${rmw_implementation_LIBRARIES}
-  ${geometry_msgs_LIBRARIES}
-  # ${sensor_msgs_LIBRARIES}
 )
 install(TARGETS vive_input DESTINATION lib/${PROJECT_NAME})
-ament_target_dependencies(vive_input rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs)
-# ament_target_dependencies(vive_node rclcpp tf2_ros std_msgs geometry_msgs)
+# ament_target_dependencies(vive_input rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs)
 
 # Finalize the ament package
 ament_package()

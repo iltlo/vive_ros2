@@ -34,16 +34,13 @@ make
     ```bash
     # copy the texture files to the bin folder
     cd <PATH to ROS2 workspace>
-    cp libraries/openvr/samples/bin/cube_texture.png libraries/openvr/samples/bin/hellovr_* install/vive_ros2/lib/
+    cp libraries/openvr/samples/bin/cube_texture.png libraries/openvr/samples/bin/hellovr_* build
     ```
     ```bash
     # Run demo code
     ~/.steam/steam/ubuntu12_32/steam-runtime/run.sh <PATH to ROS2 workspace>/libraries/openvr/samples/bin/linux64/hellovr_opengl
     ```
-    <div style="text-align: center;">
-    <video controls width="320" height="240" src="./docs/videos/hellovr_opengl-demo.mp4" title="hellovr_opengl"></video>
-    </div>
-
+    
 
 ## Usage
 1. Build the package.
@@ -59,6 +56,7 @@ make
     ```
 3. Run the package.
     ```bash
+    ros2 run vive_ros2 vive_input
     # Development in Progress...
     ```
 
