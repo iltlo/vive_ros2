@@ -159,9 +159,6 @@ target_link_libraries(vive_example
 # Install the executable and launch directory
 install(TARGETS vive_example DESTINATION lib/${PROJECT_NAME})
 
-# Specify dependencies for the ament build system
-# ament_target_dependencies(vive_example rclcpp std_msgs geometry_msgs sensor_msgs)
-
 add_executable(vive_input
   ${SHARED_SRC_FILES}
   src/vive_input.cpp
@@ -173,7 +170,18 @@ target_link_libraries(vive_input
   ${EXTRA_LIBS}
 )
 install(TARGETS vive_input DESTINATION lib/${PROJECT_NAME})
-# ament_target_dependencies(vive_input rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs)
+
+add_executable(vive_node
+  src/vive_node.cpp
+)
+target_link_libraries(vive_node
+  ${rclcpp_LIBRARIES}
+  ${geometry_msgs_LIBRARIES}
+  ${tf2_ros_LIBRARIES}
+)
+install(TARGETS vive_node DESTINATION lib/${PROJECT_NAME})
+ament_target_dependencies(vive_node rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs)
+
 
 # Finalize the ament package
 ament_package()
