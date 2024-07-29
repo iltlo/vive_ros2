@@ -165,6 +165,7 @@ install(TARGETS vive_example DESTINATION lib/${PROJECT_NAME})
 add_executable(vive_input
   ${SHARED_SRC_FILES}
   src/vive_input.cpp
+  src/server.cpp
 )
 target_link_libraries(vive_input
   ${OPENVR_LIBRARIES}

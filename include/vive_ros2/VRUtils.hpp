@@ -5,6 +5,15 @@
 #include <iostream>
 #include <cmath> // for std::sqrt, std::fmax, std::atan2, std::asin, std::abs, M_PI
 #include <openvr.h>
+#include "json.hpp"
+
+struct JsonData {
+    double pose_x, pose_y, pose_z, pose_qx, pose_qy, pose_qz, pose_qw;
+    bool button1, button2;
+    double trackpad_x, trackpad_y;
+    double trigger;
+    std::string time;
+};
 
 enum LogLevel {
     Info,
@@ -13,7 +22,7 @@ enum LogLevel {
 };
 
 // Logging function
-void logMessage(LogLevel level, const std::string& message) {
+inline void logMessage(LogLevel level, const std::string& message) {
     switch (level) {
         case Info:
             std::cout << "[INFO] " << message << std::endl;

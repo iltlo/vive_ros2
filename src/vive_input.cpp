@@ -1,23 +1,16 @@
-#include <stdio.h>
 #include <string>
-#include <cstdlib>
-
 #include <openvr.h>
-
-#include <shared/compat.h>
-#include <unistd.h>		// for sleep
-#include <cmath>		// for M_PI
-
-#include <cstdio>
 #include <chrono> // Include this for std::chrono
 #include <thread>
 
 #include "VRUtils.hpp"
+#include "json.hpp" // Include nlohmann/json
+#include "server.hpp"
 
 
 class ViveInput {
 public:
-    ViveInput();
+    ViveInput(std::mutex &mutex, std::condition_variable &cv, JsonData &data);
     ~ViveInput();
     void runVR();
 
@@ -26,12 +19,16 @@ private:
     vr::EVRInitError eError = vr::VRInitError_None;
     vr::TrackedDevicePose_t trackedDevicePose[vr::k_unMaxTrackedDeviceCount];
 
+    std::mutex &data_mutex;
+    std::condition_variable &data_cv;
+    JsonData &shared_data;
+
     bool initVR();
     bool shutdownVR();
 };
 
-ViveInput::ViveInput(){
-    // Constructor implementation...
+ViveInput::ViveInput(std::mutex &mutex, std::condition_variable &cv, JsonData &data) 
+    : data_mutex(mutex), data_cv(cv), shared_data(data) {
     if (!initVR()) {
         shutdownVR();
         throw std::runtime_error("Failed to initialize VR");
@@ -71,8 +68,19 @@ void ViveInput::runVR() {
           logMessage(Debug, "[POSE CM]: " + std::to_string(position.v[0] * 100) + " " + std::to_string(position.v[1] * 100) + " " + std::to_string(position.v[2] * 100));
           logMessage(Debug, "[EULER DEG]: " + std::to_string(euler.x * (180.0 / M_PI)) + " " + std::to_string(euler.y * (180.0 / M_PI)) + " " + std::to_string(euler.z * (180.0 / M_PI)) + "\n");
 
-          // TODO: OpenVR and ROS2 cannot be used together (result in ros2run aborted)
-          //        Use socket communication to send the controller input to ROS2 node program.
+          // Update shared data
+          {
+            std::lock_guard<std::mutex> lock(data_mutex);
+            shared_data.pose_x = position.v[0];
+            shared_data.pose_y = position.v[1];
+            shared_data.pose_z = position.v[2];
+            shared_data.pose_qx = quaternion.x;
+            shared_data.pose_qy = quaternion.y;
+            shared_data.pose_qz = quaternion.z;
+            shared_data.pose_qw = quaternion.w;
+            shared_data.time = Server::getCurrentTimeWithMilliseconds();
+          }
+          data_cv.notify_one(); // Notify the server thread
         }
       }
     }
@@ -115,9 +123,16 @@ bool ViveInput::shutdownVR() {
     return true;
 }
 
-
 int main(int argc, char **argv) {
-    ViveInput vive_input;
+    std::mutex data_mutex;
+    std::condition_variable data_cv;
+    JsonData shared_data;
+
+    Server server(2048, data_mutex, data_cv, shared_data);
+    std::thread serverThread(&Server::start, &server);
+    serverThread.detach(); // Detach the server thread
+
+    ViveInput vive_input(data_mutex, data_cv, shared_data);
     vive_input.runVR();
 
     return 0;
