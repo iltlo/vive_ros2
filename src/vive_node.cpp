@@ -28,6 +28,7 @@ private:
     int port;
     JsonData jsonData; // Use the struct for JSON data
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr transform_publisher_;
 
     void connectToServer() {
         sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -65,7 +66,11 @@ private:
         transformStamped.transform.rotation.z = jsonData.pose_qy;
         transformStamped.transform.rotation.w = jsonData.pose_qw;
 
+        // Publish to TF
         tf_broadcaster_->sendTransform(transformStamped);
+        // Publish to the /vive_pose topic
+        transform_publisher_->publish(transformStamped);
+
     }
 
 public:
@@ -77,6 +82,7 @@ public:
             exit(EXIT_FAILURE);
         }
         tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+        transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose", 10);
     }
 
     ~Client() {
