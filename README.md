@@ -1,5 +1,17 @@
 # vive_ros2 (development in progress)
 
+## Development Status
+- [x]  Obtain absolute pose data of controller
+- [x]  Implement the server client model
+- [x]  Haptic feedback to enhance user experience
+- [ ]  Solve relative transformations
+- [ ]  Add bounding conditions 
+- [ ]  Optimize performance
+
+## Overview
+
+This `vive_ros2` package provides a ROS2 interface to the HTC VIVE controllers. Due to compatibility issues between the OpenVR library and ROS2, this package utilizes socket programming to enable data transfer between two standalone programs running under ROS2 on Ubuntu.
+
 ## Installation instructions
 
 ### 1. Install Steam and SteamVR
@@ -70,3 +82,4 @@ Demo of using VIVE Pro controller to control a [WidowX-250-S](https://docs.tross
 - Ubuntu 22.04
 - ROS2 Humble
 - OpenVR SDK v2.5.1
+- HTC VIVE Pro
