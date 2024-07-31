@@ -51,6 +51,7 @@ private:
             std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait before attempting to reconnect
             connectToServer();
         }
+        RCLCPP_INFO(this->get_logger(), "Reconnected to server.");
     }
 
     void publishTransform() {
@@ -82,7 +83,7 @@ public:
             exit(EXIT_FAILURE);
         }
         tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
-        transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose", 10);
+        transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose", 150);
     }
 
     ~Client() {
@@ -96,6 +97,7 @@ public:
             RCLCPP_INFO(this->get_logger(), "Attempting to connect to server...");
             connectToServer();
         }
+        RCLCPP_INFO(this->get_logger(), "Connected to server.");
 
         char buffer[1024] = {0};
         while (rclcpp::ok()) {

@@ -72,7 +72,7 @@ void ViveInput::runVR() {
           {
             std::lock_guard<std::mutex> lock(data_mutex);
             shared_data.pose_x = position.v[0];
-            shared_data.pose_y = position.v[1];
+            shared_data.pose_y = position.v[1] - 0.6;
             shared_data.pose_z = position.v[2];
             shared_data.pose_qx = quaternion.x;
             shared_data.pose_qy = quaternion.y;
@@ -92,9 +92,9 @@ void ViveInput::runVR() {
         logMessage(Info, "no controller detected, currentTime: " + std::to_string(std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch()).count()));
         lastLogTime = currentTime; // Update the last log time
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Sleep to reduce CPU usage
+      std::this_thread::sleep_for(std::chrono::milliseconds(50)); // ~20Hz
     } else {
-      std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Sleep to maintain loop timing
+      std::this_thread::sleep_for(std::chrono::milliseconds(20)); // ~50Hz
       lastLogTime = currentTime;
     }
   }
