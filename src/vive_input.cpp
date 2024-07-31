@@ -68,6 +68,44 @@ void ViveInput::runVR() {
           logMessage(Debug, "[POSE CM]: " + std::to_string(position.v[0] * 100) + " " + std::to_string(position.v[1] * 100) + " " + std::to_string(position.v[2] * 100));
           logMessage(Debug, "[EULER DEG]: " + std::to_string(euler.x * (180.0 / M_PI)) + " " + std::to_string(euler.y * (180.0 / M_PI)) + " " + std::to_string(euler.z * (180.0 / M_PI)) + "\n");
 
+          vr::VRControllerState_t controllerState;
+          pHMD->GetControllerState(i, &controllerState, sizeof(controllerState));
+          if ((1LL << vr::k_EButton_ApplicationMenu) & controllerState.ulButtonPressed){
+            logMessage(Debug, "Application Menu button pressed");
+            VRUtils::HapticFeedback(pHMD, i, 200);
+          }
+          if ((1LL << vr::k_EButton_SteamVR_Trigger) & controllerState.ulButtonPressed) {
+            logMessage(Debug, "Trigger button pressed");
+            // VRUtils::HapticFeedback(pHMD, i, 500);
+          }
+          if ((1LL << vr::k_EButton_SteamVR_Touchpad) & controllerState.ulButtonPressed) {
+            logMessage(Debug, "Touchpad button pressed");
+            VRUtils::HapticFeedback(pHMD, i, 200);
+          }
+          if ((1LL << vr::k_EButton_Grip) & controllerState.ulButtonPressed){
+            logMessage(Debug, "Grip button pressed");
+            // VRUtils::HapticFeedback(pHMD, i, 10);
+          }
+          if ((1LL << vr::k_EButton_SteamVR_Touchpad) & controllerState.ulButtonTouched) {
+            logMessage(Debug, "Touchpad button touched");
+          }
+
+          logMessage(Debug, "Trackpad: " + std::to_string(controllerState.rAxis[0].x) + " " + std::to_string(controllerState.rAxis[0].y));
+
+          const int numSteps = 6;
+          const float stepSize = 1.0f / numSteps;
+          static int previousStep = -1; // Initialize previous step to an invalid value
+          // Get the current trigger value
+          float triggerValue = controllerState.rAxis[1].x;
+          int currentStep = static_cast<int>(triggerValue / stepSize);
+          logMessage(Debug, "Trigger: " + std::to_string(triggerValue));
+          // Check if the trigger value has crossed a new step
+          if (currentStep != previousStep) {
+              int vibrationDuration = static_cast<int>(triggerValue * 2000); // Scale to a max of 2000 ms
+              VRUtils::HapticFeedback(pHMD, i, vibrationDuration);
+              previousStep = currentStep;
+          }
+
           // Update shared data
           {
             std::lock_guard<std::mutex> lock(data_mutex);
