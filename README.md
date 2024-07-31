@@ -56,10 +56,15 @@ make
     ```
 3. Run the package.
     ```bash
+    # Terminal 1:
     ros2 run vive_ros2 vive_input
-    # Development in Progress...
+    # Terminal 2:
+    ros2 run vive_ros2 vive_node
     ```
 
+## Demo
+Demo of using VIVE Pro controller to control a [WidowX-250-S](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/wx250s.html) robot arm in ROS2 (using absolute pose).
+![VIVE Pro Demo](docs/videos/vive_pose-abs-control.gif)
 
 ## Development Environment
 - Ubuntu 22.04
