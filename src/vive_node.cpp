@@ -7,18 +7,11 @@
 #include <chrono>
 #include <thread>
 #include "json.hpp" // Include nlohmann/json
+#include "VRUtils.hpp"
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 
 using json = nlohmann::json;
-
-struct JsonData {
-    double pose_x, pose_y, pose_z, pose_qx, pose_qy, pose_qz, pose_qw;
-    bool button1, button2;
-    double trackpad_x, trackpad_y;
-    double trigger;
-    std::string time;
-};
 
 class Client : public rclcpp::Node {
 private:
@@ -26,7 +19,7 @@ private:
     struct sockaddr_in serv_addr;
     std::string address;
     int port;
-    JsonData jsonData; // Use the struct for JSON data
+    VRControllerData jsonData; // Use the struct for JSON data
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr transform_publisher_;
 
@@ -115,17 +108,32 @@ public:
                     jsonData.pose_qy = j["pose"]["qy"];
                     jsonData.pose_qz = j["pose"]["qz"];
                     jsonData.pose_qw = j["pose"]["qw"];
-                    jsonData.button1 = j["buttons"]["button1"];
-                    jsonData.button2 = j["buttons"]["button2"];
+                    jsonData.menu_button = j["buttons"]["menu"];
+                    jsonData.trigger_button = j["buttons"]["trigger"];
+                    jsonData.trackpad_touch = j["buttons"]["trackpad_touch"];
+                    jsonData.trackpad_button = j["buttons"]["trackpad_button"];
+                    jsonData.grip_button = j["buttons"]["grip"];
                     jsonData.trackpad_x = j["trackpad"]["x"];
                     jsonData.trackpad_y = j["trackpad"]["y"];
                     jsonData.trigger = j["trigger"];
+                    jsonData.role = j["role"];
                     jsonData.time = j["time"];
                     // Example of using stored data
                     RCLCPP_INFO(this->get_logger(), "Time: %s", jsonData.time.c_str());
                     RCLCPP_INFO(this->get_logger(), "Pose x: %f", jsonData.pose_x);
                     RCLCPP_INFO(this->get_logger(), "Pose y: %f", jsonData.pose_y);
                     RCLCPP_INFO(this->get_logger(), "Pose z: %f", jsonData.pose_z);
+
+                    RCLCPP_INFO(this->get_logger(), "Menu button: %s", jsonData.menu_button ? "true" : "false");
+                    RCLCPP_INFO(this->get_logger(), "Trigger button: %s", jsonData.trigger_button ? "true" : "false");
+                    RCLCPP_INFO(this->get_logger(), "Trackpad touch: %s", jsonData.trackpad_touch ? "true" : "false");
+                    RCLCPP_INFO(this->get_logger(), "Trackpad button: %s", jsonData.trackpad_button ? "true" : "false");
+                    RCLCPP_INFO(this->get_logger(), "Grip button: %s", jsonData.grip_button ? "true" : "false");
+                    
+                    RCLCPP_INFO(this->get_logger(), "Trackpad x: %f", jsonData.trackpad_x);
+                    RCLCPP_INFO(this->get_logger(), "Trackpad y: %f", jsonData.trackpad_y);
+                    RCLCPP_INFO(this->get_logger(), "Trigger: %f", jsonData.trigger);
+                    RCLCPP_INFO(this->get_logger(), "Role: %d", jsonData.role);
 
                     // Publish the transform
                     publishTransform();

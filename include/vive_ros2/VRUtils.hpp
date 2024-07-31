@@ -7,11 +7,12 @@
 #include <openvr.h>
 #include "json.hpp"
 
-struct JsonData {
+struct VRControllerData {
     double pose_x, pose_y, pose_z, pose_qx, pose_qy, pose_qz, pose_qw;
-    bool button1, button2;
+    bool menu_button, trigger_button, trackpad_touch, trackpad_button, grip_button;
     double trackpad_x, trackpad_y;
     double trigger;
+    int role;  // 1 for left, 2 for right
     std::string time;
 };
 
@@ -46,6 +47,26 @@ struct EulerAngle {
 
 class VRUtils {
 public:
+    static void resetJsonData(VRControllerData& data) {
+        data.pose_x = 0.0;
+        data.pose_y = 0.0;
+        data.pose_z = 0.0;
+        data.pose_qx = 0.0;
+        data.pose_qy = 0.0;
+        data.pose_qz = 0.0;
+        data.pose_qw = 0.0;
+        data.menu_button = false;
+        data.trigger_button = false;
+        data.trackpad_touch = false;
+        data.trackpad_button = false;
+        data.grip_button = false;
+        data.trackpad_x = 0.0;
+        data.trackpad_y = 0.0;
+        data.trigger = 0.0;
+        data.role = 1;
+        data.time = "";
+    }
+
     static bool deviceIsConnected(vr::IVRSystem* pHMD, vr::TrackedDeviceIndex_t unDeviceIndex) {
         return pHMD->IsTrackedDeviceConnected(unDeviceIndex);
     }
@@ -84,6 +105,10 @@ public:
         for (uint32_t i = 0; i < vr::k_unMaxTrackedDeviceCount; i++) {
             controllerRoleCheck(pHMD, i);
         }
+    }
+
+    static void HapticFeedback(vr::IVRSystem* pHMD, vr::TrackedDeviceIndex_t unControllerDeviceIndex, unsigned short durationMicroSec) {
+        pHMD->TriggerHapticPulse(unControllerDeviceIndex, 0, durationMicroSec);
     }
 };
 

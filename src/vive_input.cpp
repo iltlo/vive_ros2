@@ -10,7 +10,7 @@
 
 class ViveInput {
 public:
-    ViveInput(std::mutex &mutex, std::condition_variable &cv, JsonData &data);
+    ViveInput(std::mutex &mutex, std::condition_variable &cv, VRControllerData &data);
     ~ViveInput();
     void runVR();
 
@@ -21,13 +21,14 @@ private:
 
     std::mutex &data_mutex;
     std::condition_variable &data_cv;
-    JsonData &shared_data;
+    VRControllerData &shared_data;
+    VRControllerData local_data;
 
     bool initVR();
     bool shutdownVR();
 };
 
-ViveInput::ViveInput(std::mutex &mutex, std::condition_variable &cv, JsonData &data) 
+ViveInput::ViveInput(std::mutex &mutex, std::condition_variable &cv, VRControllerData &data) 
     : data_mutex(mutex), data_cv(cv), shared_data(data) {
     if (!initVR()) {
         shutdownVR();
@@ -44,6 +45,7 @@ void ViveInput::runVR() {
 
   while (true) {
     bool controllerDetected = false;
+    VRUtils::resetJsonData(local_data);
 
     // VRUtils::deviceConnectionCheck(pHMD);
     // VRUtils::controllerConnectionCheck(pHMD);
@@ -58,7 +60,7 @@ void ViveInput::runVR() {
         if (VRUtils::controllerIsConnected(pHMD, i)) {
           controllerDetected = true; // Mark that a controller was detected
           // controllerRoleCheck(i);
-          VRUtils::controllerRoleCheck(pHMD, i);
+          // VRUtils::controllerRoleCheck(pHMD, i);
 
           // Get the pose of the device
           vr::HmdMatrix34_t steamVRMatrix = trackedDevicePose[i].mDeviceToAbsoluteTracking;
@@ -68,29 +70,46 @@ void ViveInput::runVR() {
           logMessage(Debug, "[POSE CM]: " + std::to_string(position.v[0] * 100) + " " + std::to_string(position.v[1] * 100) + " " + std::to_string(position.v[2] * 100));
           logMessage(Debug, "[EULER DEG]: " + std::to_string(euler.x * (180.0 / M_PI)) + " " + std::to_string(euler.y * (180.0 / M_PI)) + " " + std::to_string(euler.z * (180.0 / M_PI)) + "\n");
 
+          local_data.time = Server::getCurrentTimeWithMilliseconds();
+          local_data.role = VRUtils::controllerRoleCheck(pHMD, i);
+          local_data.pose_x = position.v[0];
+          local_data.pose_y = position.v[1] - 0.6;
+          local_data.pose_z = position.v[2];
+          local_data.pose_qx = quaternion.x;
+          local_data.pose_qy = quaternion.y;
+          local_data.pose_qz = quaternion.z;
+          local_data.pose_qw = quaternion.w;
+
           vr::VRControllerState_t controllerState;
           pHMD->GetControllerState(i, &controllerState, sizeof(controllerState));
           if ((1LL << vr::k_EButton_ApplicationMenu) & controllerState.ulButtonPressed){
             logMessage(Debug, "Application Menu button pressed");
+            local_data.menu_button = true;
             VRUtils::HapticFeedback(pHMD, i, 200);
           }
           if ((1LL << vr::k_EButton_SteamVR_Trigger) & controllerState.ulButtonPressed) {
             logMessage(Debug, "Trigger button pressed");
+            local_data.trigger_button = true;
             // VRUtils::HapticFeedback(pHMD, i, 500);
           }
           if ((1LL << vr::k_EButton_SteamVR_Touchpad) & controllerState.ulButtonPressed) {
             logMessage(Debug, "Touchpad button pressed");
+            local_data.trackpad_button = true;
             VRUtils::HapticFeedback(pHMD, i, 200);
           }
           if ((1LL << vr::k_EButton_Grip) & controllerState.ulButtonPressed){
             logMessage(Debug, "Grip button pressed");
+            local_data.grip_button = true;
             // VRUtils::HapticFeedback(pHMD, i, 10);
           }
           if ((1LL << vr::k_EButton_SteamVR_Touchpad) & controllerState.ulButtonTouched) {
             logMessage(Debug, "Touchpad button touched");
+            local_data.trackpad_touch = true;
           }
 
           logMessage(Debug, "Trackpad: " + std::to_string(controllerState.rAxis[0].x) + " " + std::to_string(controllerState.rAxis[0].y));
+          local_data.trackpad_x = controllerState.rAxis[0].x;
+          local_data.trackpad_y = controllerState.rAxis[0].y;
 
           const int numSteps = 6;
           const float stepSize = 1.0f / numSteps;
@@ -99,6 +118,7 @@ void ViveInput::runVR() {
           float triggerValue = controllerState.rAxis[1].x;
           int currentStep = static_cast<int>(triggerValue / stepSize);
           logMessage(Debug, "Trigger: " + std::to_string(triggerValue));
+          local_data.trigger = triggerValue;
           // Check if the trigger value has crossed a new step
           if (currentStep != previousStep) {
               int vibrationDuration = static_cast<int>(triggerValue * 2000); // Scale to a max of 2000 ms
@@ -109,13 +129,7 @@ void ViveInput::runVR() {
           // Update shared data
           {
             std::lock_guard<std::mutex> lock(data_mutex);
-            shared_data.pose_x = position.v[0];
-            shared_data.pose_y = position.v[1] - 0.6;
-            shared_data.pose_z = position.v[2];
-            shared_data.pose_qx = quaternion.x;
-            shared_data.pose_qy = quaternion.y;
-            shared_data.pose_qz = quaternion.z;
-            shared_data.pose_qw = quaternion.w;
+            shared_data = local_data;
             shared_data.time = Server::getCurrentTimeWithMilliseconds();
           }
           data_cv.notify_one(); // Notify the server thread
@@ -164,7 +178,7 @@ bool ViveInput::shutdownVR() {
 int main(int argc, char **argv) {
     std::mutex data_mutex;
     std::condition_variable data_cv;
-    JsonData shared_data;
+    VRControllerData shared_data;
 
     Server server(2048, data_mutex, data_cv, shared_data);
     std::thread serverThread(&Server::start, &server);

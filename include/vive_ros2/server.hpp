@@ -21,12 +21,12 @@ private:
 
     std::mutex &data_mutex;
     std::condition_variable &data_cv;
-    JsonData &shared_data;
+    VRControllerData &shared_data;
 
     json prepareData();
 
 public:
-    Server(int port, std::mutex &mutex, std::condition_variable &cv, JsonData &data);
+    Server(int port, std::mutex &mutex, std::condition_variable &cv, VRControllerData &data);
     ~Server();
 
     void start();

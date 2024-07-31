@@ -5,7 +5,7 @@
 #include <chrono>
 #include <unistd.h> // For close()
 
-Server::Server(int port, std::mutex &mutex, std::condition_variable &cv, JsonData &data) 
+Server::Server(int port, std::mutex &mutex, std::condition_variable &cv, VRControllerData &data) 
     : data_mutex(mutex), data_cv(cv), shared_data(data) {
     signal(SIGPIPE, SIG_IGN); // Ignore SIGPIPE signals
 
@@ -58,7 +58,7 @@ void Server::start() {
                 close(new_socket);
                 break; // Exit the inner loop to wait for a new connection
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
         }
     }
 }
@@ -69,9 +69,10 @@ json Server::prepareData() {
 
     json j;
     j["pose"] = {{"x", shared_data.pose_x}, {"y", shared_data.pose_y}, {"z", shared_data.pose_z}, {"qx", shared_data.pose_qx}, {"qy", shared_data.pose_qy}, {"qz", shared_data.pose_qz}, {"qw", shared_data.pose_qw}};
-    j["buttons"] = {{"button1", shared_data.button1}, {"button2", shared_data.button2}};
+    j["buttons"] = {{"menu", shared_data.menu_button}, {"trigger", shared_data.trigger_button}, {"trackpad_touch", shared_data.trackpad_touch}, {"trackpad_button", shared_data.trackpad_button}, {"grip", shared_data.grip_button}};
     j["trackpad"] = {{"x", shared_data.trackpad_x}, {"y", shared_data.trackpad_y}};
     j["trigger"] = shared_data.trigger;
+    j["role"] = shared_data.role;
     j["time"] = shared_data.time;
     return j;
 }
