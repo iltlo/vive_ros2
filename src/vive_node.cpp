@@ -20,6 +20,8 @@ private:
     std::string address;
     int port;
     VRControllerData jsonData; // Use the struct for JSON data
+    VRControllerData initialPose;
+    bool gripButtonPressed = false;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr transform_publisher_;
 
@@ -47,24 +49,37 @@ private:
         RCLCPP_INFO(this->get_logger(), "Reconnected to server.");
     }
 
-    void publishTransform() {
+    void publishTransform(const VRControllerData& pose) {
         geometry_msgs::msg::TransformStamped transformStamped;
         transformStamped.header.stamp = this->now();
         transformStamped.header.frame_id = "world";
         transformStamped.child_frame_id = "vive_pose";
-        transformStamped.transform.translation.x = -jsonData.pose_z;
-        transformStamped.transform.translation.y = -jsonData.pose_x;
-        transformStamped.transform.translation.z = jsonData.pose_y;
-        transformStamped.transform.rotation.x = -jsonData.pose_qz;
-        transformStamped.transform.rotation.y = -jsonData.pose_qx;
-        transformStamped.transform.rotation.z = jsonData.pose_qy;
-        transformStamped.transform.rotation.w = jsonData.pose_qw;
+        transformStamped.transform.translation.x = -pose.pose_z;
+        transformStamped.transform.translation.y = -pose.pose_x;
+        transformStamped.transform.translation.z = pose.pose_y;
+        transformStamped.transform.rotation.x = -pose.pose_qz;
+        transformStamped.transform.rotation.y = -pose.pose_qx;
+        transformStamped.transform.rotation.z = pose.pose_qy;
+        transformStamped.transform.rotation.w = pose.pose_qw;
 
         // Publish to TF
         tf_broadcaster_->sendTransform(transformStamped);
         // Publish to the /vive_pose topic
         transform_publisher_->publish(transformStamped);
 
+    }
+
+    VRControllerData calculateRelativePose(const VRControllerData& initial, const VRControllerData& current) {
+        VRControllerData relativePose;
+        relativePose.pose_x = current.pose_x - initial.pose_x;
+        relativePose.pose_y = current.pose_y - initial.pose_y;
+        relativePose.pose_z = current.pose_z - initial.pose_z;
+        // TODO: Calculate relative quaternion. Calculation below is just for demonstration purposes.
+        relativePose.pose_qx = current.pose_qx - initial.pose_qx;
+        relativePose.pose_qy = current.pose_qy - initial.pose_qy;
+        relativePose.pose_qz = current.pose_qz - initial.pose_qz;
+        relativePose.pose_qw = current.pose_qw - initial.pose_qw;
+        return relativePose;
     }
 
 public:
@@ -134,9 +149,27 @@ public:
                     RCLCPP_INFO(this->get_logger(), "Trackpad y: %f", jsonData.trackpad_y);
                     RCLCPP_INFO(this->get_logger(), "Trigger: %f", jsonData.trigger);
                     RCLCPP_INFO(this->get_logger(), "Role: %d", jsonData.role);
+                    printf("\n");
 
-                    // Publish the transform
-                    publishTransform();
+                    // Handle grip button state
+                    if (jsonData.grip_button && !gripButtonPressed) {
+                        // Grip button just pressed
+                        initialPose = jsonData;
+                        gripButtonPressed = true;
+                    } else if (!jsonData.grip_button && gripButtonPressed) {
+                        // Grip button just released
+                        gripButtonPressed = false;
+                    }
+
+                    if (gripButtonPressed) {
+                        // Calculate and publish relative transform
+                        VRControllerData relativePose = calculateRelativePose(initialPose, jsonData);
+                        publishTransform(relativePose);
+                    } else {
+                        // Publish the absolute transform
+                        publishTransform(jsonData);
+                    }
+
                 } catch (json::parse_error& e) {
                     RCLCPP_ERROR(this->get_logger(), "JSON parse error: %s", e.what());
                     continue;
