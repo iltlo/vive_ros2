@@ -75,8 +75,11 @@ make
     ```
 
 ## Demo
-Demo of using VIVE Pro controller to control a [WidowX-250-S](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/wx250s.html) robot arm in ROS2 (using absolute pose).
+Using VIVE Pro controller to control a [WidowX-250-S](https://docs.trossenrobotics.com/interbotix_xsarms_docs/specifications/wx250s.html) robot arm in ROS2 (using absolute pose).
 ![VIVE Pro Demo](docs/videos/vive_pose-abs-control.gif)
+
+Visualizing the absolute and relative poses of the controller on RViz.
+![VIVE Pro Demo](docs/videos/vive_pose-relative.gif)
 
 ## Development Environment
 - Ubuntu 22.04
