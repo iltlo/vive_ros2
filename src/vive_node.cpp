@@ -23,7 +23,8 @@ private:
     VRControllerData initialPose;
     bool gripButtonPressed = false;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr transform_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr abs_transform_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr rel_transform_publisher_;
 
     void connectToServer() {
         sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -49,11 +50,13 @@ private:
         RCLCPP_INFO(this->get_logger(), "Reconnected to server.");
     }
 
-    void publishTransform(const VRControllerData& pose) {
+    void publishTransform(const VRControllerData& pose, bool isRelative = false) {
         geometry_msgs::msg::TransformStamped transformStamped;
         transformStamped.header.stamp = this->now();
         transformStamped.header.frame_id = "world";
-        transformStamped.child_frame_id = "vive_pose";
+        // transformStamped.child_frame_id = "vive_pose";
+        transformStamped.child_frame_id = (isRelative) ? "vive_pose_rel" : "vive_pose_abs";
+
         transformStamped.transform.translation.x = -pose.pose_z;
         transformStamped.transform.translation.y = -pose.pose_x;
         transformStamped.transform.translation.z = pose.pose_y;
@@ -64,9 +67,12 @@ private:
 
         // Publish to TF
         tf_broadcaster_->sendTransform(transformStamped);
-        // Publish to the /vive_pose topic
-        transform_publisher_->publish(transformStamped);
-
+        // Publish to the /vive_pose_abs or /vive_pose_rel topic
+        if (isRelative) {
+            rel_transform_publisher_->publish(transformStamped);
+        } else {
+            abs_transform_publisher_->publish(transformStamped);
+        }
     }
 
     VRControllerData calculateRelativePose(const VRControllerData& initial, const VRControllerData& current) {
@@ -91,7 +97,8 @@ public:
             exit(EXIT_FAILURE);
         }
         tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
-        transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose", 150);
+        abs_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose_abs", 150);
+        rel_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose_rel", 150);
     }
 
     ~Client() {
@@ -164,7 +171,8 @@ public:
                     if (gripButtonPressed) {
                         // Calculate and publish relative transform
                         VRControllerData relativePose = calculateRelativePose(initialPose, jsonData);
-                        publishTransform(relativePose);
+                        publishTransform(relativePose, true);   // isRelative = true
+                        publishTransform(jsonData);             // Publish absolute transform as well
                     } else {
                         // Publish the absolute transform
                         publishTransform(jsonData);
