@@ -4,7 +4,7 @@
 - [x]  Obtain absolute pose data of controller
 - [x]  Implement the server client model
 - [x]  Haptic feedback to enhance user experience
-- [ ]  Solve relative transformations
+- [x]  Solve relative transformations
 - [ ]  Add bounding conditions 
 - [ ]  Optimize performance
 

@@ -77,14 +77,34 @@ private:
 
     VRControllerData calculateRelativePose(const VRControllerData& initial, const VRControllerData& current) {
         VRControllerData relativePose;
-        relativePose.pose_x = current.pose_x - initial.pose_x;
-        relativePose.pose_y = current.pose_y - initial.pose_y;
-        relativePose.pose_z = current.pose_z - initial.pose_z;
-        // TODO: Calculate relative quaternion. Calculation below is just for demonstration purposes.
-        relativePose.pose_qx = current.pose_qx - initial.pose_qx;
-        relativePose.pose_qy = current.pose_qy - initial.pose_qy;
-        relativePose.pose_qz = current.pose_qz - initial.pose_qz;
-        relativePose.pose_qw = current.pose_qw - initial.pose_qw;
+
+        // Calculate the relative position
+        float rel_x = current.pose_x - initial.pose_x;
+        float rel_y = current.pose_y - initial.pose_y;
+        float rel_z = current.pose_z - initial.pose_z;
+
+        // Create quaternions from the initial and current poses
+        Quaternion initialQuat(initial.pose_qw, initial.pose_qx, initial.pose_qy, initial.pose_qz);
+        Quaternion currentQuat(current.pose_qw, current.pose_qx, current.pose_qy, current.pose_qz);
+
+        // Calculate the relative quaternion
+        Quaternion relativeQuat = initialQuat.inverse() * currentQuat;
+
+        // Rotate the relative position by the inverse of the initial quaternion
+        Quaternion relPosQuat(0, rel_x, rel_y, rel_z);
+        Quaternion rotatedPosQuat = initialQuat.inverse() * relPosQuat * initialQuat;
+
+        // Update the relative pose with the rotated position
+        relativePose.pose_x = rotatedPosQuat.x;
+        relativePose.pose_y = rotatedPosQuat.y;
+        relativePose.pose_z = rotatedPosQuat.z;
+
+        // Update the relative pose with the relative quaternion
+        relativePose.pose_qx = relativeQuat.x;
+        relativePose.pose_qy = relativeQuat.y;
+        relativePose.pose_qz = relativeQuat.z;
+        relativePose.pose_qw = relativeQuat.w;
+
         return relativePose;
     }
 
