@@ -54,6 +54,7 @@ private:
         geometry_msgs::msg::TransformStamped transformStamped;
         transformStamped.header.stamp = this->now();
         transformStamped.header.frame_id = "world";
+        // transformStamped.header.frame_id = (isRelative) ? "wx250s/ee_gripper_link" : "world";
         // transformStamped.child_frame_id = "vive_pose";
         transformStamped.child_frame_id = (isRelative) ? "vive_pose_rel" : "vive_pose_abs";
 
@@ -198,6 +199,11 @@ public:
                         publishTransform(jsonData);
                     }
 
+                    // If menu button is pressed, reset the initial pose
+                    if (jsonData.menu_button) {
+                        initialPose = jsonData;
+                    }
+
                 } catch (json::parse_error& e) {
                     RCLCPP_ERROR(this->get_logger(), "JSON parse error: %s", e.what());
                     continue;
@@ -215,7 +221,7 @@ public:
 
 int main(int argc, char **argv) {
     rclcpp::init(argc, argv);
-    auto client = std::make_shared<Client>("127.0.0.1", 2048);
+    auto client = std::make_shared<Client>("127.0.0.1", 12345);
     client->start();
     rclcpp::spin(client);
     rclcpp::shutdown();

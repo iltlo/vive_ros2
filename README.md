@@ -5,7 +5,7 @@
 - [x]  Implement the server client model
 - [x]  Haptic feedback to enhance user experience
 - [x]  Solve relative transformations
-- [ ]  Add bounding conditions 
+- [x]  Add bounding conditions 
 - [ ]  Optimize performance
 
 ## Overview

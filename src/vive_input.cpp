@@ -26,6 +26,14 @@ private:
 
     bool initVR();
     bool shutdownVR();
+
+    // Variables to store previous position and time
+    vr::HmdVector3_t prev_position;
+    std::chrono::steady_clock::time_point prev_time;
+    bool first_run = true;
+    // const float velocity_threshold = 2.5f;
+    const float distance_threshold = 0.05f;
+
 };
 
 ViveInput::ViveInput(std::mutex &mutex, std::condition_variable &cv, VRControllerData &data) 
@@ -68,7 +76,7 @@ void ViveInput::runVR() {
           vr::HmdQuaternion_t quaternion = VRTransformUtils::GetQuaternion(steamVRMatrix);
           EulerAngle euler = VRTransformUtils::QuaternionToEulerXYZ(quaternion);
           logMessage(Debug, "[POSE CM]: " + std::to_string(position.v[0] * 100) + " " + std::to_string(position.v[1] * 100) + " " + std::to_string(position.v[2] * 100));
-          logMessage(Debug, "[EULER DEG]: " + std::to_string(euler.x * (180.0 / M_PI)) + " " + std::to_string(euler.y * (180.0 / M_PI)) + " " + std::to_string(euler.z * (180.0 / M_PI)) + "\n");
+          logMessage(Debug, "[EULER DEG]: " + std::to_string(euler.x * (180.0 / M_PI)) + " " + std::to_string(euler.y * (180.0 / M_PI)) + " " + std::to_string(euler.z * (180.0 / M_PI)));
 
           local_data.time = Server::getCurrentTimeWithMilliseconds();
           local_data.role = VRUtils::controllerRoleCheck(pHMD, i);
@@ -83,7 +91,8 @@ void ViveInput::runVR() {
           vr::VRControllerState_t controllerState;
           pHMD->GetControllerState(i, &controllerState, sizeof(controllerState));
           if ((1LL << vr::k_EButton_ApplicationMenu) & controllerState.ulButtonPressed){
-            logMessage(Debug, "Application Menu button pressed");
+            logMessage(Debug, "Application Menu button pressed, resetting the pose");
+            first_run = true; // Reset the first run flag
             local_data.menu_button = true;
             VRUtils::HapticFeedback(pHMD, i, 200);
           }
@@ -104,12 +113,11 @@ void ViveInput::runVR() {
           }
           if ((1LL << vr::k_EButton_SteamVR_Touchpad) & controllerState.ulButtonTouched) {
             logMessage(Debug, "Touchpad button touched");
+            logMessage(Debug, "Trackpad: " + std::to_string(controllerState.rAxis[0].x) + " " + std::to_string(controllerState.rAxis[0].y));
+            local_data.trackpad_x = controllerState.rAxis[0].x;
+            local_data.trackpad_y = controllerState.rAxis[0].y;
             local_data.trackpad_touch = true;
           }
-
-          logMessage(Debug, "Trackpad: " + std::to_string(controllerState.rAxis[0].x) + " " + std::to_string(controllerState.rAxis[0].y));
-          local_data.trackpad_x = controllerState.rAxis[0].x;
-          local_data.trackpad_y = controllerState.rAxis[0].y;
 
           const int numSteps = 6;
           const float stepSize = 1.0f / numSteps;
@@ -117,14 +125,51 @@ void ViveInput::runVR() {
           // Get the current trigger value
           float triggerValue = controllerState.rAxis[1].x;
           int currentStep = static_cast<int>(triggerValue / stepSize);
-          logMessage(Debug, "Trigger: " + std::to_string(triggerValue));
+          logMessage(Debug, "Trigger: " + std::to_string(triggerValue) + "\n");
           local_data.trigger = triggerValue;
           // Check if the trigger value has crossed a new step
           if (currentStep != previousStep) {
-              int vibrationDuration = static_cast<int>(triggerValue * 2000); // Scale to a max of 2000 ms
+              int vibrationDuration = static_cast<int>(triggerValue * 3000);
               VRUtils::HapticFeedback(pHMD, i, vibrationDuration);
               previousStep = currentStep;
           }
+
+          // Check if the input data is reasonable
+          auto current_time = std::chrono::steady_clock::now();
+          if (!first_run) {
+              std::chrono::duration<float> time_diff = current_time - prev_time;
+              float delta_time = time_diff.count();
+              float delta_x = position.v[0] - prev_position.v[0];
+              float delta_y = position.v[1] - prev_position.v[1];
+              float delta_z = position.v[2] - prev_position.v[2];
+              float delta_distance = std::sqrt(delta_x * delta_x + delta_y * delta_y + delta_z * delta_z);
+              float velocity = delta_distance / delta_time;
+
+              logMessage(Debug, "Velocity: " + std::to_string(velocity) + " units/s");
+              logMessage(Debug, "Delta pos: " + std::to_string(delta_distance) + " units");
+              logMessage(Debug, "prev pos: " + std::to_string(prev_position.v[0]) + " " + std::to_string(prev_position.v[1]) + " " + std::to_string(prev_position.v[2]));
+              logMessage(Debug, "cur t: " + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(current_time.time_since_epoch()).count()));
+              logMessage(Debug, "prev t: " + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(prev_time.time_since_epoch()).count()));
+
+              // check if delta distance is too high
+              if (delta_distance > 0.05) {
+                  logMessage(Warning, "Unreasonable delta_distance detected: " + std::to_string(delta_distance) + " units. Skipping this data." + "\n");
+                  VRUtils::HapticFeedback(pHMD, i, 20);
+                  continue; // Skip this iteration if delta_distance is too high
+              } else {
+                  logMessage(Debug, "Will publish this data");
+              }
+              // if (velocity > velocity_threshold) {
+              //     logMessage(Warning, "Unreasonable velocity detected: " + std::to_string(velocity) + " units/s. Skipping this data." + "\n");
+              //     continue;
+              // }
+          } else {
+              first_run = false; // Set the flag to false after the first run
+          }
+
+          // Update previous record
+          prev_position = position;
+          prev_time = current_time;
 
           // Update shared data
           {
@@ -142,6 +187,7 @@ void ViveInput::runVR() {
       if (std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastLogTime).count() >= 1) {
         // logMessage(Info, "[time] no controller detected");
         logMessage(Info, "no controller detected, currentTime: " + std::to_string(std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch()).count()));
+        first_run = true; // Reset the first run flag
         lastLogTime = currentTime; // Update the last log time
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(50)); // ~20Hz
@@ -180,7 +226,7 @@ int main(int argc, char **argv) {
     std::condition_variable data_cv;
     VRControllerData shared_data;
 
-    Server server(2048, data_mutex, data_cv, shared_data);
+    Server server(12345, data_mutex, data_cv, shared_data);
     std::thread serverThread(&Server::start, &server);
     serverThread.detach(); // Detach the server thread
 

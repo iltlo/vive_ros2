@@ -19,6 +19,7 @@ struct VRControllerData {
 enum LogLevel {
     Info,
     Debug,
+    Warning,
     Error
 };
 
@@ -30,6 +31,9 @@ inline void logMessage(LogLevel level, const std::string& message) {
             break;
         case Debug:
             std::cout << "[DEBUG] " << message << std::endl;
+            break;
+        case Warning:
+            std::cerr << "[WARNING] " << message << std::endl;
             break;
         case Error:
             std::cerr << "[ERROR] " << message << std::endl;
