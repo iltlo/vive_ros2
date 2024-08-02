@@ -6,6 +6,7 @@
 - [x]  Haptic feedback to enhance user experience
 - [x]  Solve relative transformations
 - [x]  Add bounding conditions 
+- [ ]  Refactor code to improve readability
 - [ ]  Optimize performance
 
 ## Overview

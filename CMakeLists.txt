@@ -192,10 +192,10 @@ install(TARGETS vive_node DESTINATION lib/${PROJECT_NAME})
 ament_target_dependencies(vive_node rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs)
 rosidl_target_interfaces(vive_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-# install(PROGRAMS
-#   src/vive_control.py
-#   DESTINATION lib/${PROJECT_NAME}
-# )
+install(PROGRAMS
+  src/vive_control.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 # Finalize the ament package
 ament_package()
