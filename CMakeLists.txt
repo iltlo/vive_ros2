@@ -129,6 +129,7 @@ find_package(rosidl_default_generators REQUIRED)
 # Add the message files
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VRControllerData.msg"
+  DEPENDENCIES geometry_msgs
 )
 ament_export_dependencies(rosidl_default_runtime)
 

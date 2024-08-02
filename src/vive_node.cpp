@@ -131,7 +131,7 @@ public:
         }
     }
 
-    void publishControllerData(const VRControllerData &data) {
+    void publishControllerData(const VRControllerData &data, const VRControllerData &relData) {
         vive_ros2::msg::VRControllerData msg;
         msg.grip_button = data.grip_button;
         msg.trigger_button = data.trigger_button;
@@ -141,6 +141,32 @@ public:
         msg.trackpad_x = data.trackpad_x;
         msg.trackpad_y = data.trackpad_y;
         msg.trigger = data.trigger;
+        msg.role = data.role;
+        msg.time = data.time;
+
+        // Absolute pose data
+        msg.abs_pose.header.stamp = this->get_clock()->now();
+        msg.abs_pose.header.frame_id = "world";
+        msg.abs_pose.child_frame_id = "vive_pose_abs";
+        msg.abs_pose.transform.translation.x = data.pose_x;
+        msg.abs_pose.transform.translation.y = data.pose_y;
+        msg.abs_pose.transform.translation.z = data.pose_z;
+        msg.abs_pose.transform.rotation.x = data.pose_qx;
+        msg.abs_pose.transform.rotation.y = data.pose_qy;
+        msg.abs_pose.transform.rotation.z = data.pose_qz;
+        msg.abs_pose.transform.rotation.w = data.pose_qw;
+
+        // Relative pose data
+        msg.rel_pose.header.stamp = this->get_clock()->now();
+        msg.rel_pose.header.frame_id = "world";
+        msg.rel_pose.child_frame_id = "vive_pose_rel";
+        msg.rel_pose.transform.translation.x = relData.pose_x;
+        msg.rel_pose.transform.translation.y = relData.pose_y;
+        msg.rel_pose.transform.translation.z = relData.pose_z;
+        msg.rel_pose.transform.rotation.x = relData.pose_qx;
+        msg.rel_pose.transform.rotation.y = relData.pose_qy;
+        msg.rel_pose.transform.rotation.z = relData.pose_qz;
+        msg.rel_pose.transform.rotation.w = relData.pose_qw;
 
         controller_data_publisher_->publish(msg);
     }
@@ -206,9 +232,10 @@ public:
                         gripButtonPressed = false;
                     }
 
+                    VRControllerData relativePose;
                     if (gripButtonPressed) {
                         // Calculate and publish relative transform
-                        VRControllerData relativePose = calculateRelativePose(initialPose, jsonData);
+                        relativePose = calculateRelativePose(initialPose, jsonData);
                         publishTransform(relativePose, true);   // isRelative = true
                         publishTransform(jsonData);             // Publish absolute transform as well
                     } else {
@@ -222,7 +249,7 @@ public:
                     }
 
                     // Publish controller data
-                    publishControllerData(jsonData);
+                    publishControllerData(jsonData, relativePose);
 
                 } catch (json::parse_error& e) {
                     RCLCPP_ERROR(this->get_logger(), "JSON parse error: %s", e.what());
