@@ -117,12 +117,20 @@ endif()
 # Find required packages for building the project
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 # find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 # find_package(std_srvs REQUIRED)
+
+# Add the message files
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/VRControllerData.msg"
+)
+ament_export_dependencies(rosidl_default_runtime)
 
 # Include directories for the project
 include_directories(
@@ -181,7 +189,12 @@ target_link_libraries(vive_node
 )
 install(TARGETS vive_node DESTINATION lib/${PROJECT_NAME})
 ament_target_dependencies(vive_node rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs)
+rosidl_target_interfaces(vive_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
+# install(PROGRAMS
+#   src/vive_control.py
+#   DESTINATION lib/${PROJECT_NAME}
+# )
 
 # Finalize the ament package
 ament_package()

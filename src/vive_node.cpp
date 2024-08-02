@@ -10,6 +10,7 @@
 #include "VRUtils.hpp"
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
+#include "vive_ros2/msg/vr_controller_data.hpp"
 
 using json = nlohmann::json;
 
@@ -25,6 +26,7 @@ private:
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr abs_transform_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr rel_transform_publisher_;
+    rclcpp::Publisher<vive_ros2::msg::VRControllerData>::SharedPtr controller_data_publisher_;
 
     void connectToServer() {
         sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -120,12 +122,27 @@ public:
         tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
         abs_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose_abs", 150);
         rel_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose_rel", 150);
+        controller_data_publisher_ = this->create_publisher<vive_ros2::msg::VRControllerData>("controller_data", 10);
     }
 
     ~Client() {
         if (sock != -1) {
             close(sock);
         }
+    }
+
+    void publishControllerData(const VRControllerData &data) {
+        vive_ros2::msg::VRControllerData msg;
+        msg.grip_button = data.grip_button;
+        msg.trigger_button = data.trigger_button;
+        msg.trackpad_button = data.trackpad_button;
+        msg.trackpad_touch = data.trackpad_touch;
+        msg.menu_button = data.menu_button;
+        msg.trackpad_x = data.trackpad_x;
+        msg.trackpad_y = data.trackpad_y;
+        msg.trigger = data.trigger;
+
+        controller_data_publisher_->publish(msg);
     }
 
     void start() {
@@ -203,6 +220,9 @@ public:
                     if (jsonData.menu_button) {
                         initialPose = jsonData;
                     }
+
+                    // Publish controller data
+                    publishControllerData(jsonData);
 
                 } catch (json::parse_error& e) {
                     RCLCPP_ERROR(this->get_logger(), "JSON parse error: %s", e.what());
