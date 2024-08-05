@@ -192,7 +192,7 @@ void ViveInput::runVR() {
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(50)); // ~20Hz
     } else {
-      std::this_thread::sleep_for(std::chrono::milliseconds(20)); // ~50Hz
+      std::this_thread::sleep_for(std::chrono::milliseconds(10)); // ~50Hz
       lastLogTime = currentTime;
     }
   }
