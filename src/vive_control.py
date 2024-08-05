@@ -16,13 +16,6 @@ def deg2rad(deg):
 class ViveControl(Node):
     def __init__(self):
         super().__init__('vive_control')
-        self.subscription = self.create_subscription(
-            TransformStamped,
-            'vive_pose_rel',
-            self.tf_callback,
-            10
-        )
-        self.subscription  # prevent unused variable warning
 
         self.controller_subscription = self.create_subscription(
             VRControllerData,
@@ -59,36 +52,6 @@ class ViveControl(Node):
         self.current_roll = 0
         self.current_pitch = 0
         self.current_yaw = 0
-
-    def tf_callback(self, msg):
-        if not self.grip_button_pressed:
-            return
-
-        delta_x = msg.transform.translation.x
-        delta_y = msg.transform.translation.y
-        delta_z = msg.transform.translation.z
-
-        # Convert the quaternion to Euler angles
-        qx = msg.transform.rotation.x
-        qy = msg.transform.rotation.y
-        qz = msg.transform.rotation.z
-        qw = msg.transform.rotation.w
-
-        euler = tf_transformations.euler_from_quaternion([qx, qy, qz, qw])
-        delta_roll, delta_pitch, delta_yaw = euler
-        
-        # Calculate new EE pose
-        new_x = self.current_x + delta_x
-        new_y = self.current_y + delta_y
-        new_z = self.current_z + delta_z
-        new_roll = self.current_roll + delta_roll
-        new_pitch = self.current_pitch + delta_pitch
-        new_yaw = self.current_yaw + delta_yaw
-
-        self.get_logger().info(f'New Pose - x: {new_x:.3f}, y: {new_y:.3f}, z: {new_z:.3f}, roll: {math.degrees(new_roll):.3f}, pitch: {math.degrees(new_pitch):.3f}, yaw: {math.degrees(new_yaw):.3f}')
-
-        # Control the robot arm
-        self.bot.arm.set_ee_pose_components(x=new_x, y=new_y, z=new_z, roll=new_roll, pitch=new_pitch, yaw=new_yaw, blocking=True, moving_time=0.03, accel_time=0.01)
 
     def register_pose(self):
         current_pose_matrix = self.bot.arm.get_ee_pose()
@@ -127,20 +90,29 @@ class ViveControl(Node):
             self.get_logger().info('Trigger Button Released')
             self.bot.gripper.release()
         
-        # # Extract pose data from VRControllerData message
-        # new_x = msg.abs_pose.transform.translation.x
-        # new_y = msg.abs_pose.transform.translation.y
-        # new_z = msg.abs_pose.transform.translation.z
+        if self.grip_button_pressed:
+            # Extract relative pose data from VRControllerData message
+            delta_x = -msg.rel_pose.transform.translation.z
+            delta_y = -msg.rel_pose.transform.translation.x
+            delta_z = msg.rel_pose.transform.translation.y
+            qx = -msg.rel_pose.transform.rotation.z
+            qy = -msg.rel_pose.transform.rotation.x
+            qz = msg.rel_pose.transform.rotation.y
+            qw = msg.rel_pose.transform.rotation.w
+            euler = tf_transformations.euler_from_quaternion([qx, qy, qz, qw])
+            delta_roll, delta_pitch, delta_yaw = euler
 
-        # # Extract orientation (quaternion) and convert to Euler angles
-        # new_qx = msg.abs_pose.transform.rotation.x
-        # new_qy = msg.abs_pose.transform.rotation.y
-        # new_qz = msg.abs_pose.transform.rotation.z
-        # new_qw = msg.abs_pose.transform.rotation.w
+            # Calculate new EE pose
+            new_x = self.current_x + delta_x
+            new_y = self.current_y + delta_y
+            new_z = self.current_z + delta_z
+            new_roll = self.current_roll + delta_roll
+            new_pitch = self.current_pitch + delta_pitch
+            new_yaw = self.current_yaw + delta_yaw
 
-        # # Convert quaternion to Euler angles
-        # new_roll, new_pitch, new_yaw = tf_transformations.euler_from_quaternion([new_qx, new_qy, new_qz, new_qw])
-        # self.get_logger().info(f'New Pose - x: {new_x:.3f}, y: {new_y:.3f}, z: {new_z:.3f}, roll: {math.degrees(new_roll):.3f}, pitch: {math.degrees(new_pitch):.3f}, yaw: {math.degrees(new_yaw):.3f}')
+            self.get_logger().info(f'New Pose - x: {new_x:.3f}, y: {new_y:.3f}, z: {new_z:.3f}, roll: {math.degrees(new_roll):.3f}, pitch: {math.degrees(new_pitch):.3f}, yaw: {math.degrees(new_yaw):.3f}')
+
+            self.bot.arm.set_ee_pose_components(x=new_x, y=new_y, z=new_z, roll=new_roll * 0.5, pitch=new_pitch * 0.5, yaw=new_yaw * 0.5, blocking=True, moving_time=0.02, accel_time=0.01)
 
 
 def main(args=None):
