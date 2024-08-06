@@ -1,17 +1,10 @@
-# vive_ros2 (development in progress)
-
-## Development Status
-- [x]  Obtain absolute pose data of controller
-- [x]  Implement the server client model
-- [x]  Haptic feedback to enhance user experience
-- [x]  Solve relative transformations
-- [x]  Add bounding conditions 
-- [ ]  Refactor code to improve readability
-- [ ]  Optimize performance
+# vive_ros2
 
 ## Overview
 
 This `vive_ros2` package provides a ROS2 interface to the HTC VIVE controllers. Due to compatibility issues between the OpenVR library and ROS2, this package utilizes socket programming to enable data transfer between two standalone programs running under ROS2 on Ubuntu.
+
+https://github.com/user-attachments/assets/fa6a83e9-f711-4a8f-aed1-6e1cf5ae0147
 
 ## Installation instructions
 
@@ -52,8 +45,7 @@ make
     ```bash
     # Run demo code
     ~/.steam/steam/ubuntu12_32/steam-runtime/run.sh <PATH to ROS2 workspace>/libraries/openvr/samples/bin/linux64/hellovr_opengl
-    ```
-    
+    ```   
 
 ## Usage
 1. Build the package.
@@ -81,6 +73,15 @@ Using VIVE Pro controller to control a [WidowX-250-S](https://docs.trossenroboti
 
 Visualizing the absolute and relative poses of the controller on RViz.
 ![VIVE Pro Demo](docs/videos/vive_pose-relative.gif)
+
+## Development Status
+- [x]  Obtain absolute pose data of controller
+- [x]  Implement the server client model
+- [x]  Haptic feedback to enhance user experience
+- [x]  Solve relative transformations
+- [x]  Add bounding conditions 
+- [ ]  Refactor code to improve readability
+- [ ]  Optimize performance
 
 ## Development Environment
 - Ubuntu 22.04
