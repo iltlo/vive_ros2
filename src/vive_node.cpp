@@ -22,7 +22,7 @@ private:
     int port;
     VRControllerData jsonData; // Use the struct for JSON data
     VRControllerData initialPose;
-    bool gripButtonPressed = false;
+    bool triggerButtonPressed = false;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr abs_transform_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr rel_transform_publisher_;
@@ -222,18 +222,17 @@ public:
                     RCLCPP_INFO(this->get_logger(), "Role: %d", jsonData.role);
                     printf("\n");
 
-                    // Handle grip button state
-                    if (jsonData.grip_button && !gripButtonPressed) {
-                        // Grip button just pressed
+                    // Handle trigger button state
+                    if (jsonData.trigger_button && !triggerButtonPressed) {
+                        // Trigger button just pressed
                         initialPose = jsonData;
-                        gripButtonPressed = true;
-                    } else if (!jsonData.grip_button && gripButtonPressed) {
-                        // Grip button just released
-                        gripButtonPressed = false;
+                        triggerButtonPressed = true;
+                    } else if (!jsonData.trigger_button && triggerButtonPressed) {
+                        triggerButtonPressed = false;
                     }
 
                     VRControllerData relativePose;
-                    if (gripButtonPressed) {
+                    if (triggerButtonPressed) {
                         // Calculate and publish relative transform
                         relativePose = calculateRelativePose(initialPose, jsonData);
                         publishTransform(relativePose, true);   // isRelative = true

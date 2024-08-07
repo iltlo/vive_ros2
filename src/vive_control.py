@@ -55,7 +55,8 @@ class ViveControl(Node):
         self.initial_pose = Pose(x=0.25, y=0, z=0.15, roll=0, pitch=math.radians(35), yaw=0)
         self.current_pose = copy.deepcopy(self.initial_pose)
         self.bot.arm.set_ee_pose_components(x=self.initial_pose.x, y=self.initial_pose.y, z=self.initial_pose.z, roll=self.initial_pose.roll, pitch=self.initial_pose.pitch, yaw=self.initial_pose.yaw, moving_time=2, blocking=True)
-
+        self.trigger_button_pressed = False
+        self.gripper_open = False
         self.grip_button_pressed = False
 
 
@@ -76,29 +77,43 @@ class ViveControl(Node):
         self.get_logger().info(f'Registered Pose - x: {self.current_pose.x:.3f}, y: {self.current_pose.y:.3f}, z: {self.current_pose.z:.3f}, roll: {math.degrees(self.current_pose.roll)}, pitch: {math.degrees(self.current_pose.pitch)}, yaw: {math.degrees(self.current_pose.yaw)}')
 
     def controller_callback(self, msg):
-        # self.get_logger().info(f'Grip Button: {msg.grip_button}')
-        if msg.grip_button == 1 and not self.grip_button_pressed:
-            self.get_logger().info('Grip Button Pressed')
-            self.grip_button_pressed = True
+        # Assuming msg contains the state of the buttons
+        trigger_button = msg.trigger_button  # Replace with the correct index for the trigger button
+        grip_button = msg.grip_button  # Replace with the correct index for the grip button
+
+        # Handle trigger button for starting/stopping control
+        if trigger_button and not self.trigger_button_pressed:
+            self.trigger_button_pressed = True
+            self.get_logger().info('Trigger button pressed. Starting control.')
             self.register_pose()
-        elif msg.grip_button == 0 and self.grip_button_pressed:
-            self.get_logger().info('Grip Button Released')
-            self.grip_button_pressed = False
+            self.get_logger().info('Registered Pose')
+            # Add code to start control here
+        elif not trigger_button and self.trigger_button_pressed:
+            self.trigger_button_pressed = False
+            self.get_logger().info('Trigger button released. Stopping control.')
         if msg.trackpad_button == 1:
             self.get_logger().info('Trackpad Button Pressed!')
             # self.bot.arm.go_to_home_pose(moving_time=1, blocking=True)
             self.bot.arm.set_trajectory_time(moving_time=1)
             print('Initial Pose:', self.initial_pose.x, self.initial_pose.y, self.initial_pose.z, self.initial_pose.roll, self.initial_pose.pitch, self.initial_pose.yaw)
             self.bot.arm.set_ee_pose_components(x=self.initial_pose.x, y=self.initial_pose.y, z=self.initial_pose.z, roll=self.initial_pose.roll, pitch=self.initial_pose.pitch, yaw=self.initial_pose.yaw, moving_time=1, blocking=True)
+            self.trigger_button_pressed = False
+        # Handle grip button for toggling gripper state
+        if grip_button and not self.grip_button_pressed:
+            self.grip_button_pressed = True
+            self.gripper_open = not self.gripper_open
+            if self.gripper_open:
+                self.bot.gripper.release()
+                self.get_logger().info('Gripper opened.')
+            else:
+                self.bot.gripper.grasp()
+                self.get_logger().info('Gripper closed.')
+
+        elif not grip_button and self.grip_button_pressed:
             self.grip_button_pressed = False
-        if msg.trigger_button == 1:
-            self.get_logger().info('Trigger Button Pressed')
-            self.bot.gripper.grasp()
-        else:
-            self.get_logger().info('Trigger Button Released')
-            self.bot.gripper.release()
         
-        if self.grip_button_pressed:
+        if self.trigger_button_pressed:
+            self.get_logger().info('Control active')
             # Extract relative pose data from VRControllerData message
             delta_x = -msg.rel_pose.transform.translation.z
             delta_y = -msg.rel_pose.transform.translation.x
