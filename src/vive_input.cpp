@@ -32,7 +32,7 @@ private:
     std::chrono::steady_clock::time_point prev_time;
     bool first_run = true;
     // const float velocity_threshold = 2.5f;
-    const float distance_threshold = 0.05f;
+    const float distance_threshold = 0.1f;
 
 };
 
@@ -133,6 +133,10 @@ void ViveInput::runVR() {
               VRUtils::HapticFeedback(pHMD, i, vibrationDuration);
               previousStep = currentStep;
           }
+          // haptic feedback after trigger value pass 0.6
+          // if (local_data.trigger == 0.6) {
+          //     VRUtils::HapticFeedback(pHMD, i, 100);
+          // }
 
           // Check if the input data is reasonable
           auto current_time = std::chrono::steady_clock::now();
@@ -192,7 +196,7 @@ void ViveInput::runVR() {
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(50)); // ~20Hz
     } else {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10)); // ~50Hz
+      std::this_thread::sleep_for(std::chrono::milliseconds(5)); // ~200Hz
       lastLogTime = currentTime;
     }
   }
@@ -222,6 +226,8 @@ bool ViveInput::shutdownVR() {
 }
 
 int main(int argc, char **argv) {
+    Server::setupSignalHandlers();
+
     std::mutex data_mutex;
     std::condition_variable data_cv;
     VRControllerData shared_data;
@@ -232,6 +238,8 @@ int main(int argc, char **argv) {
 
     ViveInput vive_input(data_mutex, data_cv, shared_data);
     vive_input.runVR();
+
+    serverThread.join(); // Wait for the server thread to finish
 
     return 0;
 }

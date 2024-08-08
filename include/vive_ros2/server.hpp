@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <signal.h>
+#include <csignal>
 
 #include "json.hpp"
 #include "VRUtils.hpp"
@@ -25,12 +26,21 @@ private:
 
     json prepareData();
 
+    static void signalHandler(int signum) {
+        std::cout << "Interrupt signal (" << signum << ") received.\n";
+        exit(signum);   // terminate program
+    }
+
 public:
     Server(int port, std::mutex &mutex, std::condition_variable &cv, VRControllerData &data);
     ~Server();
 
     void start();
     static std::string getCurrentTimeWithMilliseconds();
+    static void setupSignalHandlers() {
+        signal(SIGINT, signalHandler);
+        signal(SIGTERM, signalHandler);
+    }
 };
 
 #endif // SERVER_HPP

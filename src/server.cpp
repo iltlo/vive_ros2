@@ -14,7 +14,8 @@ Server::Server(int port, std::mutex &mutex, std::condition_variable &cv, VRContr
         exit(EXIT_FAILURE);
     }
 
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+    int reuse = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &reuse, sizeof(opt))) {
         perror("setsockopt");
         exit(EXIT_FAILURE);
     }
@@ -29,7 +30,11 @@ Server::Server(int port, std::mutex &mutex, std::condition_variable &cv, VRContr
     }
 }
 Server::~Server() {
-    close(server_fd);
+    if (server_fd != -1) {
+        shutdown(server_fd, SHUT_RDWR);
+        close(server_fd);
+        server_fd = -1;
+    }
 }
 
 void Server::start() {
@@ -58,7 +63,7 @@ void Server::start() {
                 close(new_socket);
                 break; // Exit the inner loop to wait for a new connection
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));  // 500Hz
         }
     }
 }
