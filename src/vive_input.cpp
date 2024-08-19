@@ -205,7 +205,7 @@ void ViveInput::runVR() {
 bool ViveInput::initVR() {
     // Initialize VR runtime
     eError = vr::VRInitError_None;
-    pHMD = vr::VR_Init(&eError, vr::VRApplication_Scene);
+    pHMD = vr::VR_Init(&eError, vr::VRApplication_Background);
     if (eError != vr::VRInitError_None) {
         pHMD = NULL;
         std::string error_msg = vr::VR_GetVRInitErrorAsEnglishDescription(eError);
