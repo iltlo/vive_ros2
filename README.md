@@ -6,15 +6,15 @@ This `vive_ros2` package provides a ROS2 interface to the HTC VIVE controllers. 
 
 https://github.com/user-attachments/assets/fa6a83e9-f711-4a8f-aed1-6e1cf5ae0147
 
-## Installation instructions
+## Installation Instructions
 
 ### 1. Install Steam and SteamVR
 1. Install the latest version of Steam from [Steam Store](https://store.steampowered.com/).
 2. Install SteamVR in the Steam application.
 
-### 2. Downlaad and Build OpenVR SDK
+### 2. Download and Build OpenVR SDK
 ```bash
-cd <PATH to ROS2 workspace>
+cd ~
 mkdir libraries && cd libraries
 git clone https://github.com/ValveSoftware/openvr.git -b v2.5.1
 cd openvr
@@ -30,36 +30,55 @@ make
     sudo chmod +rw /dev/hidraw*
     ```
 3. You are ready to use the VIVE.
-4. (OPTIONAL) Build the sample code to test the VIVE setup.
-    ```bash
-    cd <PATH to ROS2 workspace>/libraries/openvr/samples
-    mkdir build && cd build
-    cmake .. -G "Unix Makefiles" -DCMAKE_PREFIX_PATH=/opt/Qt/5.6/gcc_64/lib/cmake -DCMAKE_BUILD_TYPE=Release
-    ```
-    Run the demo code as follows:
-    ```bash
-    # copy the texture files to the bin folder
-    cd <PATH to ROS2 workspace>
-    cp libraries/openvr/samples/bin/cube_texture.png libraries/openvr/samples/bin/hellovr_* build
-    ```
-    ```bash
-    # Run demo code
-    ~/.steam/steam/ubuntu12_32/steam-runtime/run.sh <PATH to ROS2 workspace>/libraries/openvr/samples/bin/linux64/hellovr_opengl
-    ```   
+<details>
+<summary>(OPTIONAL) Build the sample code to test the VIVE setup.</summary>
+
+```bash
+cd ~/libraries/openvr/samples
+mkdir build && cd build
+cmake .. -G "Unix Makefiles" -DCMAKE_PREFIX_PATH=/opt/Qt/5.6/gcc_64/lib/cmake -DCMAKE_BUILD_TYPE=Release
+```
+Run the demo code as follows:
+```bash
+# copy the texture files to the bin folder
+cd ~
+cp libraries/openvr/samples/bin/cube_texture.png libraries/openvr/samples/bin/hellovr_* build
+```
+```bash
+# Run demo code
+~/.steam/steam/ubuntu12_32/steam-runtime/run.sh ~/vive_ws/libraries/openvr/samples/bin/linux64/hellovr_opengl
+```   
+</details>
 
 ## Usage
-1. Build the package.
+1. Clone the repository.
     ```bash
-    cd <PATH to ROS2 workspace>
+    # here I use ~/vive_ws as the ROS2 workspace, you can change it to your own workspace
+    mkdir -p ~/vive_ws/src && cd ~/vive_ws/src
+    git clone https://github.com/iltlo/vive_ros2.git
+    ```
+2. Build the package.
+    ```bash
+    cd ~/vive_ws
     colcon build --packages-select vive_ros2
     source install/setup.bash
     ```
-2. Start SteamVR.
+3.  Set the environment variables.
     ```bash
-    source <PATH to ROS2 workspace>/src/vive_ros2/scripts/set_vr_env.sh
+    # for bash shell
+    echo "source ~/vive_ws/src/vive_ros2/scripts/set_vr_env.sh" >> ~/.bashrc
+    source ~/.bashrc
+    ```
+    ```bash
+    # for zsh shell
+    echo "source ~/vive_ws/src/vive_ros2/scripts/set_vr_env.sh" >> ~/.zshrc
+    source ~/.zshrc
+    ```
+4. Start SteamVR.
+    ```bash
     $STEAMVR/bin/linux64/vrserver --keepalive
     ```
-3. Run the package.
+5. Run the package.
     ```bash
     # Terminal 1:
     ros2 run vive_ros2 vive_input
@@ -81,7 +100,8 @@ Visualizing the absolute and relative poses of the controller on RViz.
 - [x]  Solve relative transformations
 - [x]  Add bounding conditions 
 - [ ]  Refactor code to improve readability
-- [ ]  Optimize performance
+- [x]  Optimize performance
+- [ ]  Server-client 2-way communication
 
 ## Development Environment
 - Ubuntu 22.04
