@@ -111,6 +111,24 @@ private:
         return relativePose;
     }
 
+    VRControllerData filterPose(const VRControllerData& pose) {
+        VRControllerData filteredPose = pose;
+        // simple low-pass filter
+        static VRControllerData prevPose = pose;
+        float alpha = 0.9999; // Smoothing factor
+
+        filteredPose.pose_x = alpha * pose.pose_x + (1 - alpha) * prevPose.pose_x;
+        filteredPose.pose_y = alpha * pose.pose_y + (1 - alpha) * prevPose.pose_y;
+        filteredPose.pose_z = alpha * pose.pose_z + (1 - alpha) * prevPose.pose_z;
+        filteredPose.pose_qx = alpha * pose.pose_qx + (1 - alpha) * prevPose.pose_qx;
+        filteredPose.pose_qy = alpha * pose.pose_qy + (1 - alpha) * prevPose.pose_qy;
+        filteredPose.pose_qz = alpha * pose.pose_qz + (1 - alpha) * prevPose.pose_qz;
+        filteredPose.pose_qw = alpha * pose.pose_qw + (1 - alpha) * prevPose.pose_qw;
+
+        prevPose = filteredPose;
+        return filteredPose;
+    }
+
 public:
     Client(std::string addr, int p) : Node("client_node"), sock(-1), address(addr), port(p) {
         serv_addr.sin_family = AF_INET;
@@ -171,6 +189,22 @@ public:
         controller_data_publisher_->publish(msg);
     }
 
+    // void publishStaticTransform() {
+    //     geometry_msgs::msg::TransformStamped transformStamped;
+    //     transformStamped.header.stamp = this->now();
+    //     transformStamped.header.frame_id = "vx300s/base_link";
+    //     transformStamped.child_frame_id = "world";
+    //     transformStamped.transform.translation.x = 0.0;
+    //     transformStamped.transform.translation.y = 0.0;
+    //     transformStamped.transform.translation.z = 0.0;
+    //     transformStamped.transform.rotation.x = 0.0;
+    //     transformStamped.transform.rotation.y = 0.0;
+    //     transformStamped.transform.rotation.z = 0.0;
+    //     transformStamped.transform.rotation.w = 1.0;
+
+    //     tf_broadcaster_->sendTransform(transformStamped);
+    // }
+
     void start() {
         while (sock < 0) {
             RCLCPP_INFO(this->get_logger(), "Attempting to connect to server...");
@@ -222,33 +256,37 @@ public:
                     RCLCPP_INFO(this->get_logger(), "Role: %d", jsonData.role);
                     printf("\n");
 
+                    // Filter the pose data
+                    VRControllerData filteredPose = filterPose(jsonData);
+
                     // Handle trigger button state
-                    if (jsonData.trigger_button && !triggerButtonPressed) {
+                    if (filteredPose.trigger_button && !triggerButtonPressed) {
                         // Trigger button just pressed
-                        initialPose = jsonData;
+                        initialPose = filteredPose;
                         triggerButtonPressed = true;
-                    } else if (!jsonData.trigger_button && triggerButtonPressed) {
+                    } else if (!filteredPose.trigger_button && triggerButtonPressed) {
                         triggerButtonPressed = false;
                     }
 
                     VRControllerData relativePose;
                     if (triggerButtonPressed) {
                         // Calculate and publish relative transform
-                        relativePose = calculateRelativePose(initialPose, jsonData);
+                        relativePose = calculateRelativePose(initialPose, filteredPose);
                         publishTransform(relativePose, true);   // isRelative = true
-                        publishTransform(jsonData);             // Publish absolute transform as well
+                        publishTransform(filteredPose);         // Publish absolute transform as well
                     } else {
                         // Publish the absolute transform
-                        publishTransform(jsonData);
+                        publishTransform(filteredPose);
                     }
 
                     // If menu button is pressed, reset the initial pose
-                    if (jsonData.menu_button) {
-                        initialPose = jsonData;
+                    if (filteredPose.menu_button) {
+                        initialPose = filteredPose;
                     }
 
                     // Publish controller data
-                    publishControllerData(jsonData, relativePose);
+                    // publishStaticTransform();
+                    publishControllerData(filteredPose, relativePose);
 
                 } catch (json::parse_error& e) {
                     RCLCPP_ERROR(this->get_logger(), "JSON parse error: %s", e.what());

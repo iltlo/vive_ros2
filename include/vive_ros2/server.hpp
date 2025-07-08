@@ -30,7 +30,8 @@ private:
         std::cout << "Interrupt signal (" << signum << ") received.\n";
         exit(signum);   // terminate program
     }
-
+// protected:
+//     virtual std::string prepareData() = 0; // Pure virtual function
 public:
     Server(int port, std::mutex &mutex, std::condition_variable &cv, VRControllerData &data);
     ~Server();

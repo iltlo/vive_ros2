@@ -70,6 +70,16 @@ public:
 
 class VRUtils {
 public:
+    static std::string getCurrentTimeWithMilliseconds() {
+        auto now = std::chrono::system_clock::now();
+        auto nowAsTimeT = std::chrono::system_clock::to_time_t(now);
+        auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&nowAsTimeT), "%Y-%m-%d %H:%M:%S");
+        ss << '.' << std::setfill('0') << std::setw(3) << nowMs.count();
+        return ss.str();
+    }
+
     static void resetJsonData(VRControllerData& data) {
         data.pose_x = 0.0;
         data.pose_y = 0.0;
@@ -115,7 +125,7 @@ public:
                 if (controllerRole == vr::TrackedControllerRole_LeftHand) {
                     logMessage(Debug, "[CONNECTED CONTROLLER " + std::to_string(i) + "]: role Left");
                 } else if (controllerRole == vr::TrackedControllerRole_RightHand) {
-                    logMessage(Debug, "[CONNECTED CONTROLLER " + std::to_string(i) + "]: role Right");
+                    // logMessage(Debug, "[CONNECTED CONTROLLER " + std::to_string(i) + "]: role Right");
                 } else {
                     logMessage(Debug, "[CONNECTED CONTROLLER " + std::to_string(i) + "]: role " + std::to_string(controllerRole));
                 }
