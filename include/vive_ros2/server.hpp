@@ -14,6 +14,7 @@
 
 using json = nlohmann::json;
 
+// VR Data TCP Server - handles client connections and data transmission
 class Server {
 private:
     int server_fd;
@@ -25,13 +26,16 @@ private:
     VRControllerData &shared_data;
 
     json prepareData();
+    bool createSocket();
+    bool configureSocket();
+    bool bindSocket(int port);
+    void handleClientConnection(int clientSocket);
 
     static void signalHandler(int signum) {
         std::cout << "Interrupt signal (" << signum << ") received.\n";
         exit(signum);   // terminate program
     }
-// protected:
-//     virtual std::string prepareData() = 0; // Pure virtual function
+
 public:
     Server(int port, std::mutex &mutex, std::condition_variable &cv, VRControllerData &data);
     ~Server();

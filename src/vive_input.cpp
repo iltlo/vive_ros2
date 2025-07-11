@@ -7,9 +7,34 @@
 #include "json.hpp" // Include nlohmann/json
 #include "server.hpp"
 
+// VR Input Configuration Constants
+namespace VRInputConfig {
+    constexpr double DEFAULT_PUBLISH_FREQUENCY = 50.0;
+    constexpr double MIN_PUBLISH_FREQUENCY = 0.1;
+    constexpr double MAX_PUBLISH_FREQUENCY = 1000.0;
+    constexpr int TRIGGER_FEEDBACK_STEPS = 6;
+    constexpr int HAPTIC_FEEDBACK_DURATION = 200;
+    constexpr int TRIGGER_HAPTIC_MULTIPLIER = 3000;
+    constexpr int WARNING_HAPTIC_DURATION = 20;
+    constexpr float POSITION_THRESHOLD = 0.05f;
+    constexpr float DISTANCE_THRESHOLD = 0.1f;
+    constexpr int NO_CONTROLLER_SLEEP_MS = 50;
+    constexpr int DATA_COLLECTION_SLEEP_MS = 5;
+    constexpr int CONTROLLER_DELAY_MS = 1;
+    constexpr int LOG_INTERVAL_SECONDS = 1;
+    constexpr double Y_OFFSET = 0.6;
+    
+    // Controller indices
+    constexpr int RIGHT_CONTROLLER_INDEX = 0;
+    constexpr int LEFT_CONTROLLER_INDEX = 1;
+    constexpr int MAX_CONTROLLERS = 2;
+}
+
+// VR Controller Input Handler - manages VR device detection and data processing
+// VR Controller Input Handler - manages VR device detection and data processing
 class ViveInput {
 public:
-    ViveInput(std::mutex &mutex, std::condition_variable &cv, VRControllerData &data, double publish_freq = 50.0);
+    ViveInput(std::mutex &mutex, std::condition_variable &cv, VRControllerData &data, double publish_freq = VRInputConfig::DEFAULT_PUBLISH_FREQUENCY);
     ~ViveInput();
     void runVR();
     void setPublishFrequency(double freq);
@@ -25,10 +50,10 @@ private:
     VRControllerData local_data;
     
     // Track both controllers separately (right = 0, left = 1)
-    bool controller_detected[2] = {false, false};
-    Eigen::Vector3d prev_position[2];  // Use Eigen for better vector operations
-    std::chrono::steady_clock::time_point prev_time[2];
-    bool first_run[2] = {true, true};
+    bool controller_detected[VRInputConfig::MAX_CONTROLLERS] = {false, false};
+    Eigen::Vector3d prev_position[VRInputConfig::MAX_CONTROLLERS];  // Use Eigen for better vector operations
+    std::chrono::steady_clock::time_point prev_time[VRInputConfig::MAX_CONTROLLERS];
+    bool first_run[VRInputConfig::MAX_CONTROLLERS] = {true, true};
     
     // Store data for both controllers separately
     VRControllerData right_controller_data; // For right controller (role_index = 0)
@@ -37,19 +62,22 @@ private:
     bool left_controller_updated = false;
     
     // Configurable publishing frequency for each controller (in Hz)
-    double CONTROLLER_PUBLISH_FREQUENCY = 50.0; // Default 50 Hz - adjust this as needed
-    std::chrono::steady_clock::time_point last_publish_time[2]; // For each controller
-    bool publish_time_initialized[2] = {false, false};
+    double controllerPublishFrequency = VRInputConfig::DEFAULT_PUBLISH_FREQUENCY;
+    std::chrono::steady_clock::time_point last_publish_time[VRInputConfig::MAX_CONTROLLERS]; // For each controller
+    bool publish_time_initialized[VRInputConfig::MAX_CONTROLLERS] = {false, false};
 
     bool initVR();
     bool shutdownVR();
-
-    // const float velocity_threshold = 2.5f;
-    const float distance_threshold = 0.1f;
+    void processControllerData(uint32_t deviceIndex, int roleIndex);
+    void processControllerButtons(uint32_t deviceIndex, vr::VRControllerState_t& controllerState, int roleIndex);
+    void processTriggerFeedback(float triggerValue, uint32_t deviceIndex, int roleIndex);
+    bool validatePositionChange(const Eigen::Vector3d& currentPosition, int roleIndex);
+    void publishControllerDataAtFrequency();
+    void handleControllerDetection(bool anyControllerDetected, std::chrono::steady_clock::time_point currentTime, std::chrono::steady_clock::time_point& lastLogTime);
 };
 
 ViveInput::ViveInput(std::mutex &mutex, std::condition_variable &cv, VRControllerData &data, double publish_freq) 
-    : data_mutex(mutex), data_cv(cv), shared_data(data), CONTROLLER_PUBLISH_FREQUENCY(publish_freq) {
+    : data_mutex(mutex), data_cv(cv), shared_data(data), controllerPublishFrequency(publish_freq) {
     if (!initVR()) {
         shutdownVR();
         throw std::runtime_error("Failed to initialize VR");
@@ -61,25 +89,27 @@ ViveInput::~ViveInput() {
 }
 
 void ViveInput::setPublishFrequency(double freq) {
-    if (freq > 0.0 && freq <= 1000.0) { // Reasonable bounds
-        CONTROLLER_PUBLISH_FREQUENCY = freq;
+    if (freq > VRInputConfig::MIN_PUBLISH_FREQUENCY && freq <= VRInputConfig::MAX_PUBLISH_FREQUENCY) {
+        controllerPublishFrequency = freq;
         logMessage(Info, "Controller publish frequency updated to: " + std::to_string(freq) + " Hz");
         
         // Reset timing for both controllers to apply new frequency immediately
-        publish_time_initialized[0] = false;
-        publish_time_initialized[1] = false;
+        publish_time_initialized[VRInputConfig::RIGHT_CONTROLLER_INDEX] = false;
+        publish_time_initialized[VRInputConfig::LEFT_CONTROLLER_INDEX] = false;
     } else {
-        logMessage(Warning, "Invalid frequency: " + std::to_string(freq) + " Hz. Must be between 0.1 and 1000.0 Hz");
+        logMessage(Warning, "Invalid frequency: " + std::to_string(freq) + " Hz. Must be between " + 
+                   std::to_string(VRInputConfig::MIN_PUBLISH_FREQUENCY) + " and " + 
+                   std::to_string(VRInputConfig::MAX_PUBLISH_FREQUENCY) + " Hz");
     }
 }
 
 void ViveInput::runVR() {
     logMessage(Info, "Starting VR loop");
-    logMessage(Info, "Controller publish frequency set to: " + std::to_string(CONTROLLER_PUBLISH_FREQUENCY) + " Hz");
+    logMessage(Info, "Controller publish frequency set to: " + std::to_string(controllerPublishFrequency) + " Hz");
     auto lastLogTime = std::chrono::steady_clock::now(); // Initialize the last log time
     
     // For trigger feedback
-    static int previousStep[2] = {-1, -1}; // Initialize previous step for both controllers
+    static int previousStep[VRInputConfig::MAX_CONTROLLERS] = {-1, -1}; // Initialize previous step for both controllers
 
     while (true) {
         // Reset controller detection status for this loop
@@ -131,7 +161,7 @@ void ViveInput::runVR() {
                         // Store controller data using new Eigen-based methods
                         local_data.time = Server::getCurrentTimeWithMilliseconds();
                         local_data.role = role_index; // 0 = right, 1 = left
-                        local_data.setPosition(position - Eigen::Vector3d(0, 0.6, 0)); // Apply Y offset
+                        local_data.setPosition(position - Eigen::Vector3d(0, VRInputConfig::Y_OFFSET, 0)); // Apply Y offset
                         local_data.setQuaternion(quaternion);
 
                         // Process controller state and buttons
@@ -203,7 +233,7 @@ void ViveInput::runVR() {
                                 logMessage(Warning, "[CONTROLLER " + std::to_string(role_index) + 
                                           "] Unreasonable delta_distance detected: " + 
                                           std::to_string(delta_distance) + " units. Skipping this data.");
-                                VRUtils::HapticFeedback(pHMD, i, 20);
+                                VRUtils::HapticFeedback(pHMD, i, VRInputConfig::WARNING_HAPTIC_DURATION);
                                 continue; // Skip this data
                             } else {
                                 logMessage(Debug, "[CONTROLLER " + std::to_string(role_index) + "] Will publish this data");
@@ -236,7 +266,7 @@ void ViveInput::runVR() {
         bool anyControllerDetected = controller_detected[0] || controller_detected[1];
         
         // Calculate time interval for desired frequency
-        double interval_ms = 1000.0 / CONTROLLER_PUBLISH_FREQUENCY;
+        double interval_ms = 1000.0 / controllerPublishFrequency;
         auto interval_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::duration<double, std::milli>(interval_ms));
         
@@ -273,10 +303,10 @@ void ViveInput::runVR() {
                     // Log publishing activity
                     std::string controller_name = (role == 0) ? "RIGHT" : "LEFT";
                     logMessage(Debug, "[" + controller_name + "] Data sent to server at " + 
-                              std::to_string(CONTROLLER_PUBLISH_FREQUENCY) + " Hz");
+                              std::to_string(controllerPublishFrequency) + " Hz");
                     
                     // Small delay to prevent mutex contention between controllers
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(VRInputConfig::CONTROLLER_DELAY_MS));
                 }
             }
         }
@@ -287,29 +317,29 @@ void ViveInput::runVR() {
         
         // Handle controller detection status
         if (!anyControllerDetected) {
-            if (std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastLogTime).count() >= 1) {
+            if (std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastLogTime).count() >= VRInputConfig::LOG_INTERVAL_SECONDS) {
                 logMessage(Info, "No controllers detected, currentTime: " + 
                         std::to_string(std::chrono::duration_cast<std::chrono::seconds>(currentTime.time_since_epoch()).count()));
                 
                 // Reset first_run flags for both controllers
-                first_run[0] = true;
-                first_run[1] = true;
+                first_run[VRInputConfig::RIGHT_CONTROLLER_INDEX] = true;
+                first_run[VRInputConfig::LEFT_CONTROLLER_INDEX] = true;
                 
                 lastLogTime = currentTime; // Update the last log time
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(50)); // ~20Hz when no controllers
+            std::this_thread::sleep_for(std::chrono::milliseconds(VRInputConfig::NO_CONTROLLER_SLEEP_MS)); // ~20Hz when no controllers
         } else {
             // Run at higher frequency to ensure responsive data collection
-            // but publishing is controlled by CONTROLLER_PUBLISH_FREQUENCY
-            std::this_thread::sleep_for(std::chrono::milliseconds(5)); // ~200Hz data collection
+            // but publishing is controlled by controllerPublishFrequency
+            std::this_thread::sleep_for(std::chrono::milliseconds(VRInputConfig::DATA_COLLECTION_SLEEP_MS)); // ~200Hz data collection
             lastLogTime = currentTime;
             
             // Log which controllers were detected
-            if (controller_detected[0] && controller_detected[1]) {
+            if (controller_detected[VRInputConfig::RIGHT_CONTROLLER_INDEX] && controller_detected[VRInputConfig::LEFT_CONTROLLER_INDEX]) {
                 logMessage(Debug, "Both controllers detected");
-            } else if (controller_detected[0]) {
+            } else if (controller_detected[VRInputConfig::RIGHT_CONTROLLER_INDEX]) {
                 logMessage(Debug, "Right controller detected");
-            } else if (controller_detected[1]) {
+            } else if (controller_detected[VRInputConfig::LEFT_CONTROLLER_INDEX]) {
                 logMessage(Debug, "Left controller detected");
             }
         }
@@ -340,6 +370,88 @@ bool ViveInput::shutdownVR() {
     return true;
 }
 
+void ViveInput::processControllerButtons(uint32_t deviceIndex, vr::VRControllerState_t& controllerState, int roleIndex) {
+    if ((1LL << vr::k_EButton_ApplicationMenu) & controllerState.ulButtonPressed) {
+        logMessage(Debug, "Application Menu button pressed, resetting the pose");
+        first_run[roleIndex] = true; // Reset the first run flag for this controller
+        local_data.menu_button = true;
+        VRUtils::HapticFeedback(pHMD, deviceIndex, VRInputConfig::HAPTIC_FEEDBACK_DURATION);
+    }
+    
+    if ((1LL << vr::k_EButton_SteamVR_Trigger) & controllerState.ulButtonPressed) {
+        logMessage(Debug, "Trigger button pressed");
+        local_data.trigger_button = true;
+    }
+    
+    if ((1LL << vr::k_EButton_SteamVR_Touchpad) & controllerState.ulButtonPressed) {
+        logMessage(Debug, "Touchpad button pressed");
+        local_data.trackpad_button = true;
+        VRUtils::HapticFeedback(pHMD, deviceIndex, VRInputConfig::HAPTIC_FEEDBACK_DURATION);
+    }
+    
+    if ((1LL << vr::k_EButton_Grip) & controllerState.ulButtonPressed) {
+        logMessage(Debug, "Grip button pressed");
+        local_data.grip_button = true;
+    }
+    
+    if ((1LL << vr::k_EButton_SteamVR_Touchpad) & controllerState.ulButtonTouched) {
+        logMessage(Debug, "Touchpad button touched");
+        local_data.trackpad_x = controllerState.rAxis[0].x;
+        local_data.trackpad_y = controllerState.rAxis[0].y;
+        local_data.trackpad_touch = true;
+    }
+}
+
+void ViveInput::processTriggerFeedback(float triggerValue, uint32_t deviceIndex, int roleIndex) {
+    static int previousStep[VRInputConfig::MAX_CONTROLLERS] = {-1, -1};
+    
+    const float stepSize = 1.0f / VRInputConfig::TRIGGER_FEEDBACK_STEPS;
+    int currentStep = static_cast<int>(triggerValue / stepSize);
+    logMessage(Debug, "Trigger: " + std::to_string(triggerValue) + "\n");
+    local_data.trigger = triggerValue;
+    
+    if (currentStep != previousStep[roleIndex]) {
+        int vibrationDuration = static_cast<int>(triggerValue * VRInputConfig::TRIGGER_HAPTIC_MULTIPLIER);
+        VRUtils::HapticFeedback(pHMD, deviceIndex, vibrationDuration);
+        previousStep[roleIndex] = currentStep;
+    }
+}
+
+bool ViveInput::validatePositionChange(const Eigen::Vector3d& currentPosition, int roleIndex) {
+    auto current_time = std::chrono::steady_clock::now();
+    if (!first_run[roleIndex]) {
+        std::chrono::duration<float> time_diff = current_time - prev_time[roleIndex];
+        float delta_time = time_diff.count();
+        
+        // Calculate position change using Eigen
+        Eigen::Vector3d position_change = currentPosition - prev_position[roleIndex];
+        double delta_distance = position_change.norm();
+        double velocity = delta_distance / delta_time;
+
+        logMessage(Debug, "[CONTROLLER " + std::to_string(roleIndex) + "] Velocity: " + 
+                  std::to_string(velocity) + " units/s");
+        logMessage(Debug, "[CONTROLLER " + std::to_string(roleIndex) + "] Delta pos: " + 
+                  std::to_string(delta_distance) + " units");
+        
+        // Check if delta distance is reasonable using Eigen-based validation
+        if (!VRTransforms::isPositionChangeReasonable(currentPosition, prev_position[roleIndex], VRInputConfig::POSITION_THRESHOLD)) {
+            logMessage(Warning, "[CONTROLLER " + std::to_string(roleIndex) + 
+                      "] Unreasonable delta_distance detected: " + 
+                      std::to_string(delta_distance) + " units. Skipping this data.");
+            return false;
+        } else {
+            logMessage(Debug, "[CONTROLLER " + std::to_string(roleIndex) + "] Will publish this data");
+        }
+    } else {
+        first_run[roleIndex] = false; // Set the flag to false after the first run
+    }
+
+    // Update previous record
+    prev_position[roleIndex] = currentPosition;
+    prev_time[roleIndex] = current_time;
+    return true;
+}
+
 int main(int argc, char **argv) {
     Server::setupSignalHandlers();
 
@@ -348,19 +460,19 @@ int main(int argc, char **argv) {
     VRControllerData shared_data;
     
     // Configure publishing frequency (default 50Hz, can be adjusted)
-    double publish_frequency = 50.0; // Hz
+    double publish_frequency = VRInputConfig::DEFAULT_PUBLISH_FREQUENCY;
     
     // Check for command line argument to set frequency
     if (argc > 1) {
         try {
             publish_frequency = std::stod(argv[1]);
-            if (publish_frequency <= 0.0 || publish_frequency > 1000.0) {
-                std::cerr << "Invalid frequency. Using default 50Hz." << std::endl;
-                publish_frequency = 50.0;
+            if (publish_frequency <= VRInputConfig::MIN_PUBLISH_FREQUENCY || publish_frequency > VRInputConfig::MAX_PUBLISH_FREQUENCY) {
+                std::cerr << "Invalid frequency. Using default " << VRInputConfig::DEFAULT_PUBLISH_FREQUENCY << "Hz." << std::endl;
+                publish_frequency = VRInputConfig::DEFAULT_PUBLISH_FREQUENCY;
             }
         } catch (const std::exception& e) {
-            std::cerr << "Invalid frequency argument. Using default 50Hz." << std::endl;
-            publish_frequency = 50.0;
+            std::cerr << "Invalid frequency argument. Using default " << VRInputConfig::DEFAULT_PUBLISH_FREQUENCY << "Hz." << std::endl;
+            publish_frequency = VRInputConfig::DEFAULT_PUBLISH_FREQUENCY;
         }
     }
 
