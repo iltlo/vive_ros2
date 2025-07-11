@@ -4,7 +4,7 @@
 
 This `vive_ros2` package provides a ROS2 interface to the HTC VIVE controllers. Due to compatibility issues between the OpenVR library and ROS2, this package utilizes socket programming to enable data transfer between two standalone programs running under ROS2 on Ubuntu.
 
-https://github.com/user-attachments/assets/fa6a83e9-f711-4a8f-aed1-6e1cf5ae0147
+https://github.com/user-attachments/assets/b0a85b1e-f154-4d44-8cf5-134191f0286f
 
 ## Installation Instructions
 
@@ -103,7 +103,7 @@ Visualizing the use of dual controllers.
 - [x]  Solve relative transformations
 - [x]  Add bounding conditions 
 - [x]  Separate handling for left and right VR controllers
-- [ ]  Refactor code to improve readability
+- [x]  Refactor code to improve readability
 - [x]  Optimize performance
 - [ ]  Server-client 2-way communication
 
