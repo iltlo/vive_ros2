@@ -6,8 +6,11 @@
 #include <string>
 #include <chrono>
 #include <thread>
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include "json.hpp" // Include nlohmann/json
 #include "VRUtils.hpp"
+#include "EigenTransforms.hpp"
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include "vive_ros2/msg/vr_controller_data.hpp"
@@ -117,48 +120,16 @@ private:
     }
 
     VRControllerData calculateRelativePose(const VRControllerData& initial, const VRControllerData& current) {
-        VRControllerData relativePose;
-
-        // IMPORTANT: Maintain the controller role from the current pose
-        relativePose.role = current.role;
-        
-        // Calculate the relative position
-        float rel_x = current.pose_x - initial.pose_x;
-        float rel_y = current.pose_y - initial.pose_y;
-        float rel_z = current.pose_z - initial.pose_z;
-
-        // Create quaternions from the initial and current poses
-        Quaternion initialQuat(initial.pose_qw, initial.pose_qx, initial.pose_qy, initial.pose_qz);
-        Quaternion currentQuat(current.pose_qw, current.pose_qx, current.pose_qy, current.pose_qz);
-
-        // Calculate the relative quaternion
-        Quaternion relativeQuat = initialQuat.inverse() * currentQuat;
-
-        // Rotate the relative position by the inverse of the initial quaternion
-        Quaternion relPosQuat(0, rel_x, rel_y, rel_z);
-        Quaternion rotatedPosQuat = initialQuat.inverse() * relPosQuat * initialQuat;
-
-        // Update the relative pose with the rotated position
-        relativePose.pose_x = rotatedPosQuat.x;
-        relativePose.pose_y = rotatedPosQuat.y;
-        relativePose.pose_z = rotatedPosQuat.z;
-
-        // Update the relative pose with the relative quaternion
-        relativePose.pose_qx = relativeQuat.x;
-        relativePose.pose_qy = relativeQuat.y;
-        relativePose.pose_qz = relativeQuat.z;
-        relativePose.pose_qw = relativeQuat.w;
-
-        return relativePose;
+        // Use the new Eigen-based utility function
+        return VRUtils::calculateRelativePose(initial, current);
     }
 
     VRControllerData filterPose(const VRControllerData& pose) {
-        VRControllerData filteredPose = pose;
-        // simple low-pass filter with separate state for each controller
+        // Simple low-pass filter with separate state for each controller
         static VRControllerData prevPoseLeft;
         static VRControllerData prevPoseRight;
         static bool initialized[2] = {false, false};
-        float alpha = 0.9999; // Smoothing factor
+        double alpha = 0.9999; // Smoothing factor
         
         // Get appropriate previous pose based on controller role (0=right, 1=left)
         VRControllerData& prevPose = (pose.role == 1) ? prevPoseLeft : prevPoseRight;
@@ -170,16 +141,8 @@ private:
             return pose; // Return unfiltered for first sample
         }
 
-        filteredPose.pose_x = alpha * pose.pose_x + (1 - alpha) * prevPose.pose_x;
-        filteredPose.pose_y = alpha * pose.pose_y + (1 - alpha) * prevPose.pose_y;
-        filteredPose.pose_z = alpha * pose.pose_z + (1 - alpha) * prevPose.pose_z;
-        filteredPose.pose_qx = alpha * pose.pose_qx + (1 - alpha) * prevPose.pose_qx;
-        filteredPose.pose_qy = alpha * pose.pose_qy + (1 - alpha) * prevPose.pose_qy;
-        filteredPose.pose_qz = alpha * pose.pose_qz + (1 - alpha) * prevPose.pose_qz;
-        filteredPose.pose_qw = alpha * pose.pose_qw + (1 - alpha) * prevPose.pose_qw;
-        
-        // Maintain controller role
-        filteredPose.role = pose.role;
+        // Use the new Eigen-based filtering utility
+        VRControllerData filteredPose = VRUtils::filterPose(pose, prevPose, alpha);
         
         // Store this pose for next iteration
         prevPose = filteredPose;

@@ -26,7 +26,7 @@ private:
     
     // Track both controllers separately (right = 0, left = 1)
     bool controller_detected[2] = {false, false};
-    vr::HmdVector3_t prev_position[2];
+    Eigen::Vector3d prev_position[2];  // Use Eigen for better vector operations
     std::chrono::steady_clock::time_point prev_time[2];
     bool first_run[2] = {true, true};
     
@@ -112,31 +112,28 @@ void ViveInput::runVR() {
                         // Mark this controller as detected
                         controller_detected[role_index] = true;
                         
-                        // Process this controller's data
+                        // Process this controller's data using Eigen transforms
                         // Get the pose of the device
                         vr::HmdMatrix34_t steamVRMatrix = trackedDevicePose[i].mDeviceToAbsoluteTracking;
-                        vr::HmdVector3_t position = VRTransformUtils::GetPosition(steamVRMatrix);
-                        vr::HmdQuaternion_t quaternion = VRTransformUtils::GetQuaternion(steamVRMatrix);
-                        EulerAngle euler = VRTransformUtils::QuaternionToEulerXYZ(quaternion);
+                        
+                        // Use new Eigen-based transform utilities
+                        Eigen::Vector3d position = VRTransforms::getPositionFromVRMatrix(steamVRMatrix);
+                        Eigen::Quaterniond quaternion = VRTransforms::getQuaternionFromVRMatrix(steamVRMatrix);
+                        Eigen::Vector3d euler = VRTransforms::quaternionToEulerXYZ(quaternion);
                         
                         logMessage(Debug, "[CONTROLLER " + std::to_string(role_index) + "] [POSE CM]: " + 
-                                std::to_string(position.v[0] * 100) + " " + 
-                                std::to_string(position.v[1] * 100) + " " + 
-                                std::to_string(position.v[2] * 100));
+                                std::to_string(position.x() * 100) + " " + 
+                                std::to_string(position.y() * 100) + " " + 
+                                std::to_string(position.z() * 100));
                         
                         // Reset local data for this controller
                         VRUtils::resetJsonData(local_data);
                         
-                        // Store controller data
+                        // Store controller data using new Eigen-based methods
                         local_data.time = Server::getCurrentTimeWithMilliseconds();
                         local_data.role = role_index; // 0 = right, 1 = left
-                        local_data.pose_x = position.v[0];
-                        local_data.pose_y = position.v[1] - 0.6;
-                        local_data.pose_z = position.v[2];
-                        local_data.pose_qx = quaternion.x;
-                        local_data.pose_qy = quaternion.y;
-                        local_data.pose_qz = quaternion.z;
-                        local_data.pose_qw = quaternion.w;
+                        local_data.setPosition(position - Eigen::Vector3d(0, 0.6, 0)); // Apply Y offset
+                        local_data.setQuaternion(quaternion);
 
                         // Process controller state and buttons
                         vr::VRControllerState_t controllerState;
@@ -186,23 +183,27 @@ void ViveInput::runVR() {
                             previousStep[role_index] = currentStep;
                         }
 
-                        // Check if the input data is reasonable
+                        // Check if the input data is reasonable using Eigen
                         auto current_time = std::chrono::steady_clock::now();
                         if (!first_run[role_index]) {
                             std::chrono::duration<float> time_diff = current_time - prev_time[role_index];
                             float delta_time = time_diff.count();
-                            float delta_x = position.v[0] - prev_position[role_index].v[0];
-                            float delta_y = position.v[1] - prev_position[role_index].v[1];
-                            float delta_z = position.v[2] - prev_position[role_index].v[2];
-                            float delta_distance = std::sqrt(delta_x * delta_x + delta_y * delta_y + delta_z * delta_z);
-                            float velocity = delta_distance / delta_time;
-
-                            logMessage(Debug, "[CONTROLLER " + std::to_string(role_index) + "] Velocity: " + std::to_string(velocity) + " units/s");
-                            logMessage(Debug, "[CONTROLLER " + std::to_string(role_index) + "] Delta pos: " + std::to_string(delta_distance) + " units");
                             
-                            // check if delta distance is too high
-                            if (delta_distance > 0.05) {
-                                logMessage(Warning, "[CONTROLLER " + std::to_string(role_index) + "] Unreasonable delta_distance detected: " + std::to_string(delta_distance) + " units. Skipping this data." + "\n");
+                            // Calculate position change using Eigen
+                            Eigen::Vector3d position_change = position - prev_position[role_index];
+                            double delta_distance = position_change.norm();
+                            double velocity = delta_distance / delta_time;
+
+                            logMessage(Debug, "[CONTROLLER " + std::to_string(role_index) + "] Velocity: " + 
+                                      std::to_string(velocity) + " units/s");
+                            logMessage(Debug, "[CONTROLLER " + std::to_string(role_index) + "] Delta pos: " + 
+                                      std::to_string(delta_distance) + " units");
+                            
+                            // Check if delta distance is reasonable using Eigen-based validation
+                            if (!VRTransforms::isPositionChangeReasonable(position, prev_position[role_index], 0.05)) {
+                                logMessage(Warning, "[CONTROLLER " + std::to_string(role_index) + 
+                                          "] Unreasonable delta_distance detected: " + 
+                                          std::to_string(delta_distance) + " units. Skipping this data.");
                                 VRUtils::HapticFeedback(pHMD, i, 20);
                                 continue; // Skip this data
                             } else {

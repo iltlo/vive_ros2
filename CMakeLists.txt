@@ -125,6 +125,8 @@ find_package(sensor_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 # find_package(std_srvs REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 # Add the message files
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -146,6 +148,7 @@ include_directories(
   ${geometry_msgs_INCLUDE_DIRS}
   ${rclcpp_INCLUDE_DIRS}
   ${sensor_msgs_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
 )
 
 # Define the executable target and its source files
@@ -163,6 +166,7 @@ target_link_libraries(vive_example
   ${CMAKE_DL_LIBS}
   ${EXTRA_LIBS}
   ${rmw_implementation_LIBRARIES}
+  Eigen3::Eigen
 )
 
 # Install the executable and launch directory
@@ -177,6 +181,7 @@ target_link_libraries(vive_input
   ${OPENVR_LIBRARIES}
   ${CMAKE_DL_LIBS}
   ${EXTRA_LIBS}
+  Eigen3::Eigen
 )
 install(TARGETS vive_input DESTINATION lib/${PROJECT_NAME})
 
@@ -187,9 +192,10 @@ target_link_libraries(vive_node
   ${rclcpp_LIBRARIES}
   ${geometry_msgs_LIBRARIES}
   ${tf2_ros_LIBRARIES}
+  Eigen3::Eigen
 )
 install(TARGETS vive_node DESTINATION lib/${PROJECT_NAME})
-ament_target_dependencies(vive_node rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs)
+ament_target_dependencies(vive_node rclcpp tf2_ros std_msgs geometry_msgs sensor_msgs eigen3_cmake_module Eigen3)
 rosidl_target_interfaces(vive_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 install(PROGRAMS
