@@ -21,8 +21,10 @@ private:
     std::string address;
     int port;
     VRControllerData jsonData; // Use the struct for JSON data
-    VRControllerData initialPose;
-    bool triggerButtonPressed = false;
+    VRControllerData initialPoseLeft;
+    VRControllerData initialPoseRight;
+    bool triggerButtonPressedLeft = false;
+    bool triggerButtonPressedRight = false;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr abs_transform_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr rel_transform_publisher_;
@@ -57,8 +59,13 @@ private:
         transformStamped.header.stamp = this->now();
         transformStamped.header.frame_id = "world";
         // transformStamped.header.frame_id = (isRelative) ? "wx250s/ee_gripper_link" : "world";
-        // transformStamped.child_frame_id = "vive_pose";
-        transformStamped.child_frame_id = (isRelative) ? "vive_pose_rel" : "vive_pose_abs";
+        
+        // Determine prefix based on controller role (0 = right, 1 = left)
+        std::string prefix = (pose.role == 1) ? "left_vr" : "right_vr";
+        std::string topic_name = ((isRelative) ? "vive_pose_rel" : "vive_pose_abs");
+        
+        // Set child_frame_id with the appropriate prefix
+        transformStamped.child_frame_id = prefix + "/" + topic_name;
 
         transformStamped.transform.translation.x = -pose.pose_z;
         transformStamped.transform.translation.y = -pose.pose_x;
@@ -68,14 +75,24 @@ private:
         transformStamped.transform.rotation.z = pose.pose_qy;
         transformStamped.transform.rotation.w = pose.pose_qw;
 
-        // Publish to TF
+        // Publish to TF with role-based frame naming
         tf_broadcaster_->sendTransform(transformStamped);
-        // Publish to the /vive_pose_abs or /vive_pose_rel topic
+        
+        // Create a new message to publish to the role-specific topic
+        auto topicMsg = transformStamped;
+        
+        // Publish to the appropriate topic based on role and type
         if (isRelative) {
-            rel_transform_publisher_->publish(transformStamped);
+            // Use the generic publisher - the frame ID will distinguish the controller
+            rel_transform_publisher_->publish(topicMsg);
         } else {
-            abs_transform_publisher_->publish(transformStamped);
+            // Use the generic publisher - the frame ID will distinguish the controller
+            abs_transform_publisher_->publish(topicMsg);
         }
+        
+        RCLCPP_DEBUG(this->get_logger(), "Published transform to %s with child_frame_id %s", 
+                  (isRelative ? "vive_pose_rel" : "vive_pose_abs"), 
+                  transformStamped.child_frame_id.c_str());
     }
 
     VRControllerData calculateRelativePose(const VRControllerData& initial, const VRControllerData& current) {
@@ -113,9 +130,21 @@ private:
 
     VRControllerData filterPose(const VRControllerData& pose) {
         VRControllerData filteredPose = pose;
-        // simple low-pass filter
-        static VRControllerData prevPose = pose;
+        // simple low-pass filter with separate state for each controller
+        static VRControllerData prevPoseLeft;
+        static VRControllerData prevPoseRight;
+        static bool initialized[2] = {false, false};
         float alpha = 0.9999; // Smoothing factor
+        
+        // Get appropriate previous pose based on controller role (0=right, 1=left)
+        VRControllerData& prevPose = (pose.role == 1) ? prevPoseLeft : prevPoseRight;
+        
+        // Initialize if this is the first data for this controller
+        if (!initialized[pose.role]) {
+            prevPose = pose;
+            initialized[pose.role] = true;
+            return pose; // Return unfiltered for first sample
+        }
 
         filteredPose.pose_x = alpha * pose.pose_x + (1 - alpha) * prevPose.pose_x;
         filteredPose.pose_y = alpha * pose.pose_y + (1 - alpha) * prevPose.pose_y;
@@ -124,10 +153,17 @@ private:
         filteredPose.pose_qy = alpha * pose.pose_qy + (1 - alpha) * prevPose.pose_qy;
         filteredPose.pose_qz = alpha * pose.pose_qz + (1 - alpha) * prevPose.pose_qz;
         filteredPose.pose_qw = alpha * pose.pose_qw + (1 - alpha) * prevPose.pose_qw;
-
+        
+        // Maintain controller role
+        filteredPose.role = pose.role;
+        
+        // Store this pose for next iteration
         prevPose = filteredPose;
+        
         return filteredPose;
     }
+
+
 
 public:
     Client(std::string addr, int p) : Node("client_node"), sock(-1), address(addr), port(p) {
@@ -138,9 +174,14 @@ public:
             exit(EXIT_FAILURE);
         }
         tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+        
+        // Create publishers with generic base names
+        // We use standard names, but the messages will have role-specific frame_ids
         abs_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose_abs", 150);
         rel_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose_rel", 150);
         controller_data_publisher_ = this->create_publisher<vive_ros2::msg::VRControllerData>("controller_data", 10);
+        
+        RCLCPP_INFO(this->get_logger(), "Publishers created. Controller data will be published with role-based frame IDs.");
     }
 
     ~Client() {
@@ -162,10 +203,13 @@ public:
         msg.role = data.role;
         msg.time = data.time;
 
+        // Determine prefix based on controller role (0 = right, 1 = left)
+        std::string prefix = (data.role == 1) ? "left_vr" : "right_vr";
+
         // Absolute pose data
         msg.abs_pose.header.stamp = this->get_clock()->now();
         msg.abs_pose.header.frame_id = "world";
-        msg.abs_pose.child_frame_id = "vive_pose_abs";
+        msg.abs_pose.child_frame_id = prefix + "/vive_pose_abs";
         msg.abs_pose.transform.translation.x = data.pose_x;
         msg.abs_pose.transform.translation.y = data.pose_y;
         msg.abs_pose.transform.translation.z = data.pose_z;
@@ -177,7 +221,7 @@ public:
         // Relative pose data
         msg.rel_pose.header.stamp = this->get_clock()->now();
         msg.rel_pose.header.frame_id = "world";
-        msg.rel_pose.child_frame_id = "vive_pose_rel";
+        msg.rel_pose.child_frame_id = prefix + "/vive_pose_rel";
         msg.rel_pose.transform.translation.x = relData.pose_x;
         msg.rel_pose.transform.translation.y = relData.pose_y;
         msg.rel_pose.transform.translation.z = relData.pose_z;
@@ -186,7 +230,11 @@ public:
         msg.rel_pose.transform.rotation.z = relData.pose_qz;
         msg.rel_pose.transform.rotation.w = relData.pose_qw;
 
+        // Publish to the controller data topic with role-specific frame_ids
         controller_data_publisher_->publish(msg);
+        
+        // For debugging
+        RCLCPP_DEBUG(this->get_logger(), "Published controller data for %s controller", prefix.c_str());
     }
 
     // void publishStaticTransform() {
@@ -205,6 +253,12 @@ public:
     //     tf_broadcaster_->sendTransform(transformStamped);
     // }
 
+    // Helper method to get a topic name based on controller role
+    std::string getRoleBasedTopicName(int role, const std::string& baseTopic) {
+        std::string prefix = (role == 1) ? "left_vr" : "right_vr";
+        return prefix + "/" + baseTopic;
+    }
+
     void start() {
         while (sock < 0) {
             RCLCPP_INFO(this->get_logger(), "Attempting to connect to server...");
@@ -217,6 +271,8 @@ public:
             memset(buffer, 0, sizeof(buffer)); // Clear buffer
             int bytesReceived = read(sock, buffer, 1024);
             if (bytesReceived > 0) {
+                // Measure processing time for performance monitoring
+                auto start_time = std::chrono::steady_clock::now();
                 std::string receivedData(buffer, bytesReceived);
                 try {
                     json j = json::parse(receivedData);
@@ -238,34 +294,37 @@ public:
                     jsonData.trigger = j["trigger"];
                     jsonData.role = j["role"];
                     jsonData.time = j["time"];
-                    // Example of using stored data
-                    RCLCPP_INFO(this->get_logger(), "Time: %s", jsonData.time.c_str());
-                    RCLCPP_INFO(this->get_logger(), "Pose x: %f", jsonData.pose_x);
-                    RCLCPP_INFO(this->get_logger(), "Pose y: %f", jsonData.pose_y);
-                    RCLCPP_INFO(this->get_logger(), "Pose z: %f", jsonData.pose_z);
-
-                    RCLCPP_INFO(this->get_logger(), "Menu button: %s", jsonData.menu_button ? "true" : "false");
-                    RCLCPP_INFO(this->get_logger(), "Trigger button: %s", jsonData.trigger_button ? "true" : "false");
-                    RCLCPP_INFO(this->get_logger(), "Trackpad touch: %s", jsonData.trackpad_touch ? "true" : "false");
-                    RCLCPP_INFO(this->get_logger(), "Trackpad button: %s", jsonData.trackpad_button ? "true" : "false");
-                    RCLCPP_INFO(this->get_logger(), "Grip button: %s", jsonData.grip_button ? "true" : "false");
+                    // Log minimal information at INFO level
+                    std::string controller_name = (jsonData.role == 1) ? "LEFT" : "RIGHT";
+                    RCLCPP_INFO(this->get_logger(), "[%s] Received data at time: %s", 
+                                controller_name.c_str(), jsonData.time.c_str());
                     
-                    RCLCPP_INFO(this->get_logger(), "Trackpad x: %f", jsonData.trackpad_x);
-                    RCLCPP_INFO(this->get_logger(), "Trackpad y: %f", jsonData.trackpad_y);
-                    RCLCPP_INFO(this->get_logger(), "Trigger: %f", jsonData.trigger);
-                    RCLCPP_INFO(this->get_logger(), "Role: %d", jsonData.role);
-                    printf("\n");
+                    // Detailed logging only at DEBUG level - won't slow down processing in normal operation
+                    RCLCPP_DEBUG(this->get_logger(), "[%s] Pose: x=%f, y=%f, z=%f", 
+                                controller_name.c_str(), jsonData.pose_x, jsonData.pose_y, jsonData.pose_z);
+                    RCLCPP_DEBUG(this->get_logger(), "[%s] Buttons: menu=%d, trigger=%d, trackpad=%d, grip=%d", 
+                                controller_name.c_str(), 
+                                jsonData.menu_button, jsonData.trigger_button, 
+                                jsonData.trackpad_button, jsonData.grip_button);
 
                     // Filter the pose data
                     VRControllerData filteredPose = filterPose(jsonData);
+
+                    // Get references to the correct variables based on controller role
+                    VRControllerData& initialPose = (filteredPose.role == 1) ? initialPoseLeft : initialPoseRight;
+                    bool& triggerButtonPressed = (filteredPose.role == 1) ? triggerButtonPressedLeft : triggerButtonPressedRight;
 
                     // Handle trigger button state
                     if (filteredPose.trigger_button && !triggerButtonPressed) {
                         // Trigger button just pressed
                         initialPose = filteredPose;
                         triggerButtonPressed = true;
+                        RCLCPP_DEBUG(this->get_logger(), "[%s] Trigger pressed - setting initial pose", 
+                                    (filteredPose.role == 1) ? "LEFT" : "RIGHT");
                     } else if (!filteredPose.trigger_button && triggerButtonPressed) {
                         triggerButtonPressed = false;
+                        RCLCPP_DEBUG(this->get_logger(), "[%s] Trigger released", 
+                                    (filteredPose.role == 1) ? "LEFT" : "RIGHT");
                     }
 
                     VRControllerData relativePose;
@@ -282,11 +341,24 @@ public:
                     // If menu button is pressed, reset the initial pose
                     if (filteredPose.menu_button) {
                         initialPose = filteredPose;
+                        RCLCPP_DEBUG(this->get_logger(), "[%s] Menu pressed - resetting initial pose", 
+                                    (filteredPose.role == 1) ? "LEFT" : "RIGHT");
                     }
 
-                    // Publish controller data
+                    // Publish controller data with role-based naming
                     // publishStaticTransform();
                     publishControllerData(filteredPose, relativePose);
+                    
+                    // Calculate and log processing time
+                    auto end_time = std::chrono::steady_clock::now();
+                    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+                    
+                    // Only log processing time periodically to avoid logging overhead
+                    static int counter = 0;
+                    if (++counter % 100 == 0) {
+                        RCLCPP_INFO(this->get_logger(), "[%s] Processing time: %ld μs", 
+                                 (filteredPose.role == 1) ? "LEFT" : "RIGHT", duration);
+                    }
 
                 } catch (json::parse_error& e) {
                     RCLCPP_ERROR(this->get_logger(), "JSON parse error: %s", e.what());

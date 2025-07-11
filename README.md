@@ -66,24 +66,24 @@ cp libraries/openvr/samples/bin/cube_texture.png libraries/openvr/samples/bin/he
 3.  Set the environment variables.
     ```bash
     # for bash shell
-    echo "source ~/vive_ws/src/vive_ros2/scripts/set_vr_env.sh" >> ~/.bashrc
+    echo 'alias setup_vive="source ~/vive_ws/src/vive_ros2/scripts/set_vr_env.sh && source ~/vive_ws/install/setup.bash"' >> ~/.bashrc
     source ~/.bashrc
     ```
     ```bash
     # for zsh shell
-    echo "source ~/vive_ws/src/vive_ros2/scripts/set_vr_env.sh" >> ~/.zshrc
+    echo 'alias setup_vive="source ~/vive_ws/src/vive_ros2/scripts/set_vr_env.sh && source ~/vive_ws/install/setup.zsh"' >> ~/.zshrc
     source ~/.zshrc
     ```
 4. Start SteamVR.
     ```bash
-    $STEAMVR/bin/linux64/vrserver --keepalive
+    setup_vive && $STEAMVR/bin/linux64/vrserver --keepalive
     ```
 5. Run the package.
     ```bash
     # Terminal 1:
     ros2 run vive_ros2 vive_input
     # Terminal 2:
-    ros2 run vive_ros2 vive_node
+    ros2 run vive_ros2 vive_node 100 # 100 Hz for each controller
     ```
 
 ## Demo
@@ -99,6 +99,7 @@ Visualizing the absolute and relative poses of the controller on RViz.
 - [x]  Haptic feedback to enhance user experience
 - [x]  Solve relative transformations
 - [x]  Add bounding conditions 
+- [x]  Separate handling for left and right VR controllers
 - [ ]  Refactor code to improve readability
 - [x]  Optimize performance
 - [ ]  Server-client 2-way communication
