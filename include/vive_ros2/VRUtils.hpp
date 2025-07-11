@@ -122,63 +122,7 @@ inline void logMessage(LogLevel level, const std::string& message) {
     }
 }
 
-/**
- * @brief Legacy Euler angle structure (kept for compatibility)
- * @deprecated Use Eigen::Vector3d with VRTransforms functions instead
- */
-struct EulerAngle {
-    float x; // Roll
-    float y; // Pitch
-    float z; // Yaw
-    
-    EulerAngle(float roll = 0.0f, float pitch = 0.0f, float yaw = 0.0f) 
-        : x(roll), y(pitch), z(yaw) {}
-    
-    Eigen::Vector3d toEigen() const {
-        return Eigen::Vector3d(static_cast<double>(x), 
-                              static_cast<double>(y), 
-                              static_cast<double>(z));
-    }
-};
 
-/**
- * @brief Legacy Quaternion class (kept for compatibility)
- * @deprecated Use Eigen::Quaterniond instead
- */
-class Quaternion {
-public:
-    float w, x, y, z;
-
-    Quaternion(float w = 1.0f, float x = 0.0f, float y = 0.0f, float z = 0.0f) 
-        : w(w), x(x), y(y), z(z) {}
-
-    Quaternion inverse() const {
-        return Quaternion(w, -x, -y, -z);
-    }
-
-    Quaternion operator*(const Quaternion& q) const {
-        return Quaternion(
-            w * q.w - x * q.x - y * q.y - z * q.z,
-            w * q.x + x * q.w + y * q.z - z * q.y,
-            w * q.y - x * q.z + y * q.w + z * q.x,
-            w * q.z + x * q.y - y * q.x + z * q.w
-        );
-    }
-    
-    Eigen::Quaterniond toEigen() const {
-        return Eigen::Quaterniond(static_cast<double>(w),
-                                 static_cast<double>(x),
-                                 static_cast<double>(y),
-                                 static_cast<double>(z));
-    }
-    
-    static Quaternion fromEigen(const Eigen::Quaterniond& eq) {
-        return Quaternion(static_cast<float>(eq.w()),
-                         static_cast<float>(eq.x()),
-                         static_cast<float>(eq.y()),
-                         static_cast<float>(eq.z()));
-    }
-};
 
 /**
  * @brief Utility class for VR device management and data handling
@@ -365,57 +309,6 @@ public:
         filtered.setQuaternion(filteredQuat);
         
         return filtered;
-    }
-};
-
-/**
- * @brief Legacy transform utilities class (kept for compatibility)
- * @deprecated Use VRTransforms namespace functions instead
- */
-class VRTransformUtils {
-public:
-    /**
-     * @deprecated Use VRTransforms::getQuaternionFromVRMatrix instead
-     */
-    static vr::HmdQuaternion_t GetQuaternion(const vr::HmdMatrix34_t& m) {
-        Eigen::Quaterniond eigenQuat = VRTransforms::getQuaternionFromVRMatrix(m);
-        
-        vr::HmdQuaternion_t q;
-        q.w = eigenQuat.w();
-        q.x = eigenQuat.x();
-        q.y = eigenQuat.y();
-        q.z = eigenQuat.z();
-        
-        return q;
-    }
-
-    /**
-     * @deprecated Use VRTransforms::getPositionFromVRMatrix instead
-     */
-    static vr::HmdVector3_t GetPosition(const vr::HmdMatrix34_t& m) {
-        Eigen::Vector3d eigenPos = VRTransforms::getPositionFromVRMatrix(m);
-        
-        vr::HmdVector3_t vector;
-        vector.v[0] = eigenPos.x();
-        vector.v[1] = eigenPos.y();
-        vector.v[2] = eigenPos.z();
-        
-        return vector;
-    }
-
-    /**
-     * @deprecated Use VRTransforms::quaternionToEulerXYZ instead
-     */
-    static EulerAngle QuaternionToEulerXYZ(const vr::HmdQuaternion_t& q) {
-        Eigen::Quaterniond eigenQuat(q.w, q.x, q.y, q.z);
-        Eigen::Vector3d euler = VRTransforms::quaternionToEulerXYZ(eigenQuat);
-        
-        EulerAngle angles;
-        angles.x = static_cast<float>(euler.x());
-        angles.y = static_cast<float>(euler.y());
-        angles.z = static_cast<float>(euler.z());
-        
-        return angles;
     }
 };
 

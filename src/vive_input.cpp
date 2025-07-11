@@ -119,7 +119,6 @@ void ViveInput::runVR() {
                         // Use new Eigen-based transform utilities
                         Eigen::Vector3d position = VRTransforms::getPositionFromVRMatrix(steamVRMatrix);
                         Eigen::Quaterniond quaternion = VRTransforms::getQuaternionFromVRMatrix(steamVRMatrix);
-                        Eigen::Vector3d euler = VRTransforms::quaternionToEulerXYZ(quaternion);
                         
                         logMessage(Debug, "[CONTROLLER " + std::to_string(role_index) + "] [POSE CM]: " + 
                                 std::to_string(position.x() * 100) + " " + 
