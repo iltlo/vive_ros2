@@ -29,6 +29,12 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr abs_transform_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr rel_transform_publisher_;
     rclcpp::Publisher<vive_ros2::msg::VRControllerData>::SharedPtr controller_data_publisher_;
+    
+    // Role-specific publishers
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr left_abs_transform_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr left_rel_transform_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr right_abs_transform_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr right_rel_transform_publisher_;
 
     void connectToServer() {
         sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -81,12 +87,27 @@ private:
         // Create a new message to publish to the role-specific topic
         auto topicMsg = transformStamped;
         
-        // Publish to the appropriate topic based on role and type
+        // Publish to the appropriate role-specific topic
+        // log out the pose.role
+        RCLCPP_INFO(this->get_logger(), "Publishing transform for role: %d", pose.role);
+        if (pose.role == 1) { // Left controller
+            if (isRelative) {
+                left_rel_transform_publisher_->publish(topicMsg);
+            } else {
+                left_abs_transform_publisher_->publish(topicMsg);
+            }
+        } else { // Right controller (role == 0)
+            if (isRelative) {
+                right_rel_transform_publisher_->publish(topicMsg);
+            } else {
+                right_abs_transform_publisher_->publish(topicMsg);
+            }
+        }
+        
+        // Also publish to generic topics for backward compatibility
         if (isRelative) {
-            // Use the generic publisher - the frame ID will distinguish the controller
             rel_transform_publisher_->publish(topicMsg);
         } else {
-            // Use the generic publisher - the frame ID will distinguish the controller
             abs_transform_publisher_->publish(topicMsg);
         }
         
@@ -98,6 +119,9 @@ private:
     VRControllerData calculateRelativePose(const VRControllerData& initial, const VRControllerData& current) {
         VRControllerData relativePose;
 
+        // IMPORTANT: Maintain the controller role from the current pose
+        relativePose.role = current.role;
+        
         // Calculate the relative position
         float rel_x = current.pose_x - initial.pose_x;
         float rel_y = current.pose_y - initial.pose_y;
@@ -175,13 +199,18 @@ public:
         }
         tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
         
-        // Create publishers with generic base names
-        // We use standard names, but the messages will have role-specific frame_ids
+        // Create publishers with role-specific topic names
         abs_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose_abs", 150);
         rel_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("vive_pose_rel", 150);
         controller_data_publisher_ = this->create_publisher<vive_ros2::msg::VRControllerData>("controller_data", 10);
         
-        RCLCPP_INFO(this->get_logger(), "Publishers created. Controller data will be published with role-based frame IDs.");
+        // Create role-specific publishers for better topic organization
+        left_abs_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("left_vr/vive_pose_abs", 150);
+        left_rel_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("left_vr/vive_pose_rel", 150);
+        right_abs_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("right_vr/vive_pose_abs", 150);
+        right_rel_transform_publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("right_vr/vive_pose_rel", 150);
+        
+        RCLCPP_INFO(this->get_logger(), "Publishers created with role-based topic names.");
     }
 
     ~Client() {

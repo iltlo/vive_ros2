@@ -93,6 +93,9 @@ Using VIVE Pro controller to control a [WidowX-250-S](https://docs.trossenroboti
 Visualizing the absolute and relative poses of the controller on RViz.
 ![VIVE Pro Demo](docs/videos/vive_pose-relative.gif)
 
+Visualizing the use of dual controllers.
+![VIVE Pro Demo](docs/videos/vive_dual-controller.gif)
+
 ## Development Status
 - [x]  Obtain absolute pose data of controller
 - [x]  Implement the server client model
